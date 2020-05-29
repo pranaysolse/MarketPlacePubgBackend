@@ -1,11 +1,11 @@
-let h;
+// let h;
 require('dotenv').config()
 const jwt = require('jsonwebtoken');
 const mysql = require("mysql");
 const express = require("express");
 const app = express()
-const bcrypt = require('bcrypt');
-const SALTROUND = 10;
+// const bcrypt = require('bcrypt');
+// const SALTROUND = 10;
 app.use(express.json())
 // const cors = require('cors')
 // app.use(cors())
@@ -27,18 +27,18 @@ app.use(express.json())
 //     res.send("logged in");
 // }})
 
-let posts = {
-    name:'pranay',
-    age:'20'
-} 
+// let posts = {
+//     name:'pranay',
+//     age:'20'
+// } 
 
-app.post('/refresh',(req,res)=>{
-    const rToken = req.body.token;
-    console.log(rToken);
-    console.log(req.body);
-    // console.log(req)
-    res.json({rToken:rToken});
-})
+// app.post('/refresh',(req,res)=>{
+//     const rToken = req.body.token;
+//     console.log(rToken);
+//     console.log(req.body);
+//     // console.log(req)
+//     res.json({rToken:rToken});
+// })
 
 app.post('/post',authenticateToken,(req,res)=>{
     // const username = req.query.name
@@ -48,17 +48,17 @@ app.post('/post',authenticateToken,(req,res)=>{
 })
 
 function authenticateToken(req,res,next){
-    console.log("hello")
+    // console.log("hello")
     const authheader = req.headers['authorization']
-    console.log(authheader);
+    // console.log(authheader);
     const token = authheader && authheader.split(' ')[1]
-    console.log(token)
+    // console.log(token)
     if (token== null) return res.sendStatus(401);
     jwt.verify(token,process.env.ACCESS_TOKEN,(error,user)=>{
         if(error){
             res.sendStatus(403)
         }
-        console.log("user",user);
+        // console.log("user",user);
         req.user = user;
         next();
     }) 

@@ -4,8 +4,8 @@ const redis_client = redis.createClient(port,'localhost')
 redis_client.on("error",function(error){
     console.log(error)
 })
-let s =redis_client.get('key',redis.print)
-// redis_client.set("key", "value", redis.print)
-console.log(s)
 
+redis_client.set('key',"pranay",console.log)
+      redis_client.get('key',console.log)
+    
 // console.log(redis_client.get("key",  redis.print))
