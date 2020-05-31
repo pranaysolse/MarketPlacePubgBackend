@@ -6,6 +6,12 @@ redis_client.on("error",function(error){
 })
 
 redis_client.set('key',"pranay",console.log)
-      redis_client.get('key',console.log)
-    
-// console.log(redis_client.get("key",  redis.print))
+redis_client.get('key',console.log)
+redis_client.get('s',(error,reply)=>{
+    if(error){
+        return console.log(error);
+    }
+    if(reply==null){
+    console.log("reply",reply)
+    }
+})    

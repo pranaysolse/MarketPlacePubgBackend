@@ -2,10 +2,11 @@ require('dotenv').config()
 const jwt = require('jsonwebtoken')
 const express = require('express');
 const app = express()
+const cookieParser = require('cookie-parser');
 const cors = require('cors');
 ypt = require('bcrypt');
 const SALTROUND = 10;
-
+app.use(cookieParser())
 // var bodyParser = require('body-parser');
 // app.use(bodyParser.json());
 // app.use(bodyParser.urlencoded());
@@ -58,18 +59,41 @@ app.post('/login',async (req,res)=>{
     
     console.log("both tokens \n" ,{accessToken:token,refreshtoken:refreshToken})
     
-    res.send({accessToken:token,refreshtoken:refreshToken});
+    res.cookie("refreshtoken",refreshToken,{
+        // httpOnly:true
+    }).send("send cookie");
+    console.log("cookie created succesfully");
 })
 
 
 
 //login logout 
 app.delete('/logout',(req,res)=>{
-    let refresh_token = req.headers['authorization'].split(' ')[1]
-    console.log("refreshtoken:",refresh_token)
-    if(refresh_token==null){
-        return res.sendStatus(403);
-    }
+        const refresh_token = req.cookies.refreshtoken
+        console.log("refresh_token: ", refresh_token);
+        //write validation logic herer
+
+    // let refresh_token = req.headers['authorization'].split(' ')[1]
+    // console.log("refreshtoken:",refresh_token)
+    // if(refresh_token==null){
+    //     return res.sendStatus(403);
+    // }
+    // check if cookie exist here please
+
+    // promisify this and then wait for redis server reply and then preoicess next step
+    redis_client.get(refresh_token,(error,reply)=>{
+        const t = error
+        const s = reply
+        if (error){
+            console.log(error)
+           return res.sendStatus(401)
+        }
+        if(reply==null){
+            console.log("401: unautorized")
+            return res.sendStatus(401);
+        }
+        if(reply){
+            console.log("reply: ",reply)
     jwt.verify(refresh_token,process.env.REFRESH_TOKEN,(error,user)=>{
         if (error){
             console.log(error)
@@ -79,22 +103,29 @@ app.delete('/logout',(req,res)=>{
 
          redis_client.del(refresh_token,(error,value)=>{
              if (error) console.log("error:", error)
-             if (value) console.log("value:", value)
+             if (value==1) {console.log("value:", value);console.log("deleted")
+             return res.sendStatus(201)
+            }if(value==0){
+                console.log("forbidden");
+                return res.sendStatus(403)
+            }
          })
         
         
         })
-        res.sendStatus(201)
-})
+    }
+})})
 
 
 // refresh token
 app.post('/refresh',async (req,res)=>{
-    let refresh_token = req.headers['authorization'].split(' ')[1]
-    if(refresh_token==null){
-        return res.sendStatus(403)
-    }
-    console.log("before");
+    console.log("cookies: ",req.cookies)
+
+    // let refresh_token = req.headers['authorization'].split(' ')[1]
+    // if(refresh_token==null){
+    //     return res.sendStatus(403)
+    // }
+    // console.log("before");
 
     // redis_client.get(refresh_token,(element)=>{
         // console.log(element);
@@ -107,18 +138,22 @@ app.post('/refresh',async (req,res)=>{
     
     
     // }
+    const refresh_token = req.cookies.refreshtoken
     redis_client.get(refresh_token,(error,response)=>{
         if (error){
+            return res.sendStatus(401)
+        }
+        if(response==null){
             return res.sendStatus(401)
         }
         console.log("response: ", response)
         jwt.verify(refresh_token,process.env.REFRESH_TOKEN,(error,value)=>{
             if(error){
                 console.log("error:" ,error)
-                res.sendStatus(403)
+                return res.sendStatus(401)
             }
             console.log("value: ",value)
-            res.json({
+            return res.json({
                 newToken:generateAccessToken({name:value.name})
             })
     })
