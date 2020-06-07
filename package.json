@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start-server1": "nodemon authserver.js",
+    "start-server1": "nodemon ./src/server.js",
+    "start-server2": "nodemon ./src/authserver.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "pranay Sosle",
@@ -24,6 +25,9 @@
     "uuid": "^8.1.0"
   },
   "devDependencies": {
+    "eslint": "^6.8.0",
+    "eslint-config-airbnb-base": "^14.1.0",
+    "eslint-plugin-import": "^2.20.2",
     "nodemon": "^2.0.4"
   }
 }
