@@ -8,33 +8,22 @@ require('dotenv').config({ path: './configs/.env' });
 const corsConfig = require('../configs/corsConfig');
 const config = require('../configs/MysqlConfig');
 
+console.log(config);
 const app = express();
-
 const SALTROUND = 10;
-// const axios = require('axios');
 app.use(express.json());
-
 app.use(cors(corsConfig.config));
-
-console.log(config.Config);
-console.log(process.env.MYSQL_PASSWORD);
-// app.get('/', (req,res)=>{
-//     res.json({name:"pranay"})
-// })
 const Connection = mysql.createConnection(config.Config);
 Connection.connect();
 
 app.post('/register', (req, res) => {
 // make middleware for this stuff like crearing the required
 // uuid storing the password in the database
+// validate if user is real aka two step authenticatipons and stuff
   const { name } = req.body;
   const { password } = req.body;
-  // validate if user is real aka two step authenticatipons and stuff
   const { email } = req.body;
-
-
   const uuid = uuidv4();
-  // hash the pass
 
   Connection.query(`select email from user where email=${Connection.escape(email)}`, (error, response) => {
     if (error) {
@@ -45,6 +34,7 @@ app.post('/register', (req, res) => {
       console.log('not null');
       return res.sendStatus(401);
     }
+
     bcrypt.hash(password, SALTROUND, (err, hash) => {
       if (err) {
         console.log('error in hashing: ', err);
@@ -53,6 +43,7 @@ app.post('/register', (req, res) => {
 
       // let sql =
       // inset all the data into the table got from the register
+
       Connection.query('insert into user values(?,?,?,?)', [uuid, name, hash, email], (error2, result) => {
         if (error2) {
           console.log('mysql error : ', error2);
@@ -63,6 +54,7 @@ app.post('/register', (req, res) => {
       });
       return null;
     });
+
     return null;
   });
 });
@@ -171,9 +163,6 @@ app.post('/post', authenticateToken, (req, res) => {
   // res.json({name:username});
   res.json({ response: 'done' });
 });
-
-
-console.log('hello');
 
 
 // let connection = mysql.createConnection({
