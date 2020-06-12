@@ -1,8 +1,9 @@
-require('dotenv').config();
+require("dotenv").config();
 
 exports.Config = {
-  host: 'localhost',
-  user: 'root',
-  password: `${process.env.MYSQL_PASSWORD}`,
-  database: 'marketplace',
+  host: "localhost",
+  user: "root",
+  // password: `${process.env.MYSQL_PASSWORD}`,
+  password: "root",
+  database: "marketplace",
 };
