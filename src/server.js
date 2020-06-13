@@ -8,32 +8,22 @@ require("dotenv").config({ path: "./configs/.env" });
 const corsConfig = require("../configs/corsConfig");
 const config = require("../configs/MysqlConfig");
 
+console.log(config);
 const app = express();
-
 const SALTROUND = 10;
-// const axios = require('axios');
 app.use(express.json());
-
 app.use(cors(corsConfig.config));
-
-console.log(config.Config);
-// console.log(process.env.MYSQL_PASSWORD);
-// app.get('/', (req,res)=>{
-//     res.json({name:"pranay"})
-// })
 const Connection = mysql.createConnection(config.Config);
 Connection.connect();
 
 app.post("/register", (req, res) => {
   // make middleware for this stuff like crearing the required
   // uuid storing the password in the database
+  // validate if user is real aka two step authenticatipons and stuff
   const { name } = req.body;
   const { password } = req.body;
-  // validate if user is real aka two step authenticatipons and stuff
   const { email } = req.body;
-
   const uuid = uuidv4();
-  // hash the pass
 
   Connection.query(
     `select email from user where email=${Connection.escape(email)}`,
@@ -198,8 +188,6 @@ app.post("/post", authenticateToken, (req, res) => {
   // res.json({name:username});
   res.json({ response: "done" });
 });
-
-console.log("hello");
 
 // let connection = mysql.createConnection({
 //     host:'localhost',
