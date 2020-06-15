@@ -20,7 +20,7 @@ app.post("/register", (req, res) => {
   // make middleware for this stuff like crearing the required
   // uuid storing the password in the database
   // validate if user is real aka two step authenticatipons and stuff
-  const { name } = req.body;
+  const { username } = req.body;
   const { password } = req.body;
   const { email } = req.body;
   const uuid = uuidv4();
@@ -33,7 +33,7 @@ app.post("/register", (req, res) => {
       }
 
       if (response[0] && response[0].email != null) {
-        console.log("not null");
+        console.log("Email Already Exists");
         return res.sendStatus(401);
       }
       bcrypt.hash(password, SALTROUND, (err, hash) => {
@@ -46,14 +46,14 @@ app.post("/register", (req, res) => {
         // inset all the data into the table got from the register
         Connection.query(
           "insert into user values(?,?,?,?)",
-          [uuid, name, hash, email],
+          [uuid, username, hash, email],
           (error2, result) => {
             if (error2) {
               console.log("mysql error : ", error2);
               return res.sendStatus(501);
             }
             console.log(result);
-            return res.sendStatus(200);
+            return res.status(200).send("SuccesFully Created User");
           }
         );
         return null;
@@ -223,6 +223,6 @@ app.post("/post", authenticateToken, (req, res) => {
 //     return ;
 // })
 
-app.listen(3000, () => {
-  console.log("listening on port 3000");
+app.listen(5000, () => {
+  console.log("listening on port 5000");
 });
