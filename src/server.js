@@ -1,12 +1,12 @@
-const cors = require("cors");
-const mysql = require("mysql");
-const jwt = require("jsonwebtoken");
-const express = require("express");
-const { v4: uuidv4 } = require("uuid");
-const bcrypt = require("bcrypt");
-require("dotenv").config({ path: "./configs/.env" });
-const corsConfig = require("../configs/corsConfig");
-const config = require("../configs/MysqlConfig");
+const cors = require('cors');
+const mysql = require('mysql');
+const jwt = require('jsonwebtoken');
+const express = require('express');
+const { v4: uuidv4 } = require('uuid');
+const bcrypt = require('bcrypt');
+require('dotenv').config({ path: './configs/.env' });
+const corsConfig = require('../configs/corsConfig');
+const config = require('../configs/MysqlConfig');
 
 console.log(config);
 const app = express();
@@ -16,7 +16,7 @@ app.use(cors(corsConfig.config));
 const Connection = mysql.createConnection(config.Config);
 Connection.connect();
 
-app.post("/register", (req, res) => {
+app.post('/register', (req, res) => {
   // make middleware for this stuff like crearing the required
   // uuid storing the password in the database
   // validate if user is real aka two step authenticatipons and stuff
@@ -33,47 +33,47 @@ app.post("/register", (req, res) => {
       }
 
       if (response[0] && response[0].email != null) {
-        console.log("Email Already Exists");
+        console.log('Email Already Exists');
         return res.sendStatus(401);
       }
       bcrypt.hash(password, SALTROUND, (err, hash) => {
         if (err) {
-          console.log("error in hashing: ", err);
+          console.log('error in hashing: ', err);
           return res.sendStatus(501);
         }
 
         // let sql =
         // inset all the data into the table got from the register
         Connection.query(
-          "insert into user values(?,?,?,?)",
+          'insert into user values(?,?,?,?)',
           [uuid, username, hash, email],
           (error2, result) => {
             if (error2) {
-              console.log("mysql error : ", error2);
+              console.log('mysql error : ', error2);
               return res.sendStatus(501);
             }
             console.log(result);
-            return res.status(200).send("SuccesFully Created User");
-          }
+            return res.status(200).send('SuccesFully Created User');
+          },
         );
         return null;
       });
       return null;
-    }
+    },
   );
 });
 
-app.post("/login", (req, res) => {
+app.post('/login', (req, res) => {
   const { email } = req.body;
   const { password } = req.body;
   // console.log(password);
   // check for the password agaist databse
   const sqlQuery = `select uuid,password from user where email = ${Connection.escape(
-    email
+    email,
   )}`;
   Connection.query(sqlQuery, async (error, response) => {
     if (error) {
-      console.log("mysql error: ", error);
+      console.log('mysql error: ', error);
       return res.sendStatus(501);
     }
     console.log(response);
@@ -99,23 +99,23 @@ app.post("/login", (req, res) => {
       // });console.
 
       if (!validator) {
-        res.status(401).send("Password Not Match");
-        console.log("password not match");
+        res.status(401).send('Password Not Match');
+        console.log('password not match');
       } else {
-        console.log("redirecting to authserver");
-        res.redirect(307, "http://localhost:4000/login");
+        console.log('redirecting to authserver');
+        res.redirect(307, 'http://localhost:4000/login');
         // res.send("passmatch");
 
         // axios stuff
         // fetch heere
         console.log(
-          "axios will take response from authserver: logging response: ",
+          'axios will take response from authserver: logging response: ',
           response[0].uuid,
-          response[0].password
+          response[0].password,
         );
       }
     } else {
-      res.status(401).send("Email Not Found");
+      res.status(401).send('Email Not Found');
     }
 
     // res.json({name:req.body.name,password:req.body.password});
@@ -168,7 +168,7 @@ function authenticateToken(req, res, next) {
   // console.log("hello")
   const authheader = req.headers.authorization;
   // console.log(authheader);
-  const token = authheader && authheader.split(" ")[1];
+  const token = authheader && authheader.split(' ')[1];
   // console.log(token)
   if (token == null) return res.sendStatus(401);
   jwt.verify(token, process.env.ACCESS_TOKEN, (error, user) => {
@@ -182,11 +182,11 @@ function authenticateToken(req, res, next) {
   return null;
 }
 
-app.post("/post", authenticateToken, (req, res) => {
+app.post('/post', authenticateToken, (req, res) => {
   // const username = req.query.name
   // console.log(username);
   // res.json({name:username});
-  res.json({ response: "done" });
+  res.json({ response: 'done' });
 });
 
 // let connection = mysql.createConnection({
@@ -224,5 +224,5 @@ app.post("/post", authenticateToken, (req, res) => {
 // })
 
 app.listen(5000, () => {
-  console.log("listening on port 5000");
+  console.log('listening on port 5000');
 });
