@@ -4,17 +4,27 @@ const jwt = require('jsonwebtoken');
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcrypt');
+
+const app = express();
+const http = require('http').createServer(app);
+const io = require('socket.io')(http);
+const config = require('../configs/MysqlConfig');
 require('dotenv').config({ path: './configs/.env' });
 const corsConfig = require('../configs/corsConfig');
-const config = require('../configs/MysqlConfig');
 
 console.log(config);
-const app = express();
 const SALTROUND = 10;
 app.use(express.json());
 app.use(cors(corsConfig.config));
 const Connection = mysql.createConnection(config.Config);
 Connection.connect();
+
+io.on('connection', (socket) => {
+  socket.on('chat', (chat) => {
+    console.log(chat);
+    io.emit('chat', chat);
+  });
+});
 
 app.post('/register', (req, res) => {
   // make middleware for this stuff like crearing the required
@@ -223,6 +233,6 @@ app.post('/post', authenticateToken, (req, res) => {
 //     return ;
 // })
 
-app.listen(5000, () => {
-  console.log('listening on port 5000');
+http.listen(5000, () => {
+  console.log('listening on port 3000');
 });
