@@ -26,7 +26,7 @@ io.on("connection", (socket) => {
 
   socket.on("chat", (chat) => {
     console.log("Chat", chat);
-    io.emit("chatmsg", chat);
+    io.emit("chat", chat);
   });
 
   socket.on("disconnect", () => {
@@ -205,6 +205,23 @@ app.post("/post", authenticateToken, (req, res) => {
   // console.log(username);
   // res.json({name:username});
   res.json({ response: "done" });
+});
+
+app.post("/userdata", (req, res) => {
+  const { email } = req.body;
+
+  // check for the password agaist databse
+  const sqlQuery = `select name from user where email = ${Connection.escape(
+    email
+  )}`;
+  Connection.query(sqlQuery, async (error, response) => {
+    if (error) {
+      console.log("mysql error: ", error);
+      return res.sendStatus(501);
+    }
+    console.log(response);
+    res.send(response[0].name);
+  });
 });
 
 // let connection = mysql.createConnection({
