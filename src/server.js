@@ -41,6 +41,10 @@ app.post("/register", (req, res) => {
   const { username } = req.body;
   const { password } = req.body;
   const { email } = req.body;
+  const { pubgid } = req.body;
+  const balance = 0;
+  const level = 0;
+  const xp = 0;
   const uuid = uuidv4();
 
   Connection.query(
@@ -63,8 +67,8 @@ app.post("/register", (req, res) => {
         // let sql =
         // inset all the data into the table got from the register
         Connection.query(
-          "insert into user values(?,?,?,?)",
-          [uuid, username, hash, email],
+          "insert into user values(?,?,?,?,?,?,?,?)",
+          [uuid, username, hash, email, pubgid, balance, level, xp],
           (error2, result) => {
             if (error2) {
               console.log("mysql error : ", error2);
@@ -215,7 +219,7 @@ app.post("/userdata", (req, res) => {
   const { email } = req.body;
 
   // check for the password agaist databse
-  const sqlQuery = `select name,email,uuid from user where email = ${Connection.escape(
+  const sqlQuery = `select username,email,uuid,balance,level,xp,pubgid from user where email = ${Connection.escape(
     email
   )}`;
   Connection.query(sqlQuery, async (error, response) => {
