@@ -121,7 +121,11 @@ app.post("/login", (req, res) => {
         console.log("password not match");
       } else {
         console.log("redirecting to authserver");
+
+        // res.send(response[0].uuid);
+
         res.redirect(307, "http://localhost:4000/login");
+
         // res.send("passmatch");
 
         // axios stuff
@@ -211,7 +215,7 @@ app.post("/userdata", (req, res) => {
   const { email } = req.body;
 
   // check for the password agaist databse
-  const sqlQuery = `select name from user where email = ${Connection.escape(
+  const sqlQuery = `select name,email,uuid from user where email = ${Connection.escape(
     email
   )}`;
   Connection.query(sqlQuery, async (error, response) => {
@@ -220,7 +224,30 @@ app.post("/userdata", (req, res) => {
       return res.sendStatus(501);
     }
     console.log(response);
-    res.send(response[0].name);
+    res.send(response[0]);
+  });
+});
+
+app.put("/edit/:id", (req, res) => {
+  const paramuuid = req.params.id;
+  // console.log(paramuuid);
+  const changeEmail = req.body.email;
+  const changeName = req.body.name;
+  // const changeEmail = req.body.email;
+
+  const sqlQuery = `update user set ${
+    changeEmail ? `email="${changeEmail}"` : ""
+  } ${changeName && changeEmail ? "," : ""} ${
+    changeName ? `name="${changeName}"` : ""
+  } where uuid = ${Connection.escape(paramuuid)}`;
+
+  Connection.query(sqlQuery, async (error, response) => {
+    if (error) {
+      console.log("mysql error: ", error);
+      return res.sendStatus(501);
+    }
+    console.log("OK");
+    res.send("Good");
   });
 });
 

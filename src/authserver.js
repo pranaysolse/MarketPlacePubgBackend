@@ -1,17 +1,16 @@
-const redis = require('redis');
+const redis = require("redis");
 // const bcrypt = require('bcrypt');
 
 // console.log(corsConfig.config);
-require('dotenv').config();
-const jwt = require('jsonwebtoken');
-const express = require('express');
+require("dotenv").config();
+const jwt = require("jsonwebtoken");
+const express = require("express");
 
 const app = express();
-const cookieParser = require('cookie-parser');
-const cors = require('cors');
+const cookieParser = require("cookie-parser");
+const cors = require("cors");
 // const Cookie = require('js-cookie');
-const corsConfig = require('../configs/corsConfig');
-
+const corsConfig = require("../configs/corsConfig");
 
 // const SALTROUND = 10;
 app.use(cookieParser());
@@ -28,26 +27,27 @@ app.use(cookieParser());
 // redi to store the refresh tokens
 
 const port = 6379;
-const redisClient = redis.createClient(port, 'localhost');
-redisClient.on('error', (error) => {
+const redisClient = redis.createClient(port, "localhost");
+redisClient.on("error", (error) => {
   console.log(error);
 });
 
-redisClient.on('connect', () => {
-  console.log('connected');
+redisClient.on("connect", () => {
+  console.log("connected");
 });
 
 app.use(express.json());
 app.use(cors(corsConfig.config));
 // let refreshTokenArray =[]
 function generateAccessToken(user) {
-  return jwt.sign(user, process.env.ACCESS_TOKEN, { expiresIn: '60s' });
+  return jwt.sign(user, process.env.ACCESS_TOKEN, { expiresIn: "60s" });
 }
 // login token
-app.post('/login', async (req, res) => {
+app.post("/login", async (req, res) => {
   console.log(req.body);
   const { email } = req.body;
   const { password } = req.body;
+
   // console.log("email:", email, "pass: ", password);
 
   // authenticate with pass
@@ -64,23 +64,23 @@ app.post('/login', async (req, res) => {
 
   // refreshTokenArray.push(refreshToken);
 
-  console.log('both tokens \n', {
+  console.log("both tokens \n", {
     accessToken: token,
     refreshtoken: refreshToken,
   });
 
   res
-    .cookie('refreshtoken', refreshToken, {
+    .cookie("refreshtoken", refreshToken, {
       //  httpOnly:true
     })
-    .send('send cookie');
-  console.log('cookie created succesfully');
+    .send("send cookie");
+  console.log("cookie created succesfully");
 });
 
 // login logout
-app.delete('/logout', (req, res) => {
+app.delete("/logout", (req, res) => {
   const refreshToken = req.cookies.refreshtoken;
-  console.log('refreshToken: ', refreshToken);
+  console.log("refreshToken: ", refreshToken);
   // write validation logic herer
 
   // let refreshToken = req.headers['authorization'].split(' ')[1]
@@ -99,11 +99,11 @@ app.delete('/logout', (req, res) => {
       return res.sendStatus(401);
     }
     if (reply == null) {
-      console.log('401: unautorized');
+      console.log("401: unautorized");
       return res.sendStatus(401);
     }
     if (reply) {
-      console.log('reply: ', reply);
+      console.log("reply: ", reply);
       jwt.verify(refreshToken, process.env.REFRESH_TOKEN, (err) => {
         if (err) {
           console.log(err);
@@ -112,14 +112,14 @@ app.delete('/logout', (req, res) => {
         // console.log(refreshTokenArray)
 
         redisClient.del(refreshToken, (error2, value) => {
-          if (error2) console.log('error:', error2);
+          if (error2) console.log("error:", error2);
           if (value === 1) {
-            console.log('value:', value);
-            console.log('deleted');
+            console.log("value:", value);
+            console.log("deleted");
             return res.sendStatus(200);
           }
           if (value === 0) {
-            console.log('forbidden');
+            console.log("forbidden");
             return res.sendStatus(403);
           }
           return null;
@@ -132,10 +132,10 @@ app.delete('/logout', (req, res) => {
 });
 
 // refresh token
-app.post('/refresh', async (req, res) => {
+app.post("/refresh", async (req, res) => {
   console.log(req.body);
   console.log(req);
-  console.log('cookies: ', req.cookies);
+  console.log("cookies: ", req.cookies);
 
   // let refreshToken = req.headers['authorization'].split(' ')[1]
   // if(refreshToken==null){
@@ -161,13 +161,13 @@ app.post('/refresh', async (req, res) => {
     if (response == null) {
       return res.sendStatus(401);
     }
-    console.log('response: ', response);
+    console.log("response: ", response);
     jwt.verify(refreshToken, process.env.refreshToken, (err2, value) => {
       if (err2) {
-        console.log('error:', err2);
+        console.log("error:", err2);
         return res.sendStatus(401);
       }
-      console.log('value: ', value);
+      console.log("value: ", value);
       return res.json({
         newToken: generateAccessToken({ name: value.name }),
       });
@@ -176,4 +176,4 @@ app.post('/refresh', async (req, res) => {
   });
 });
 
-app.listen(4000, () => console.log('listening on 4000'));
+app.listen(4000, () => console.log("listening on 4000"));
