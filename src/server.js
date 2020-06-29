@@ -56,7 +56,7 @@ app.post("/register", (req, res) => {
 
       if (response[0] && response[0].email != null) {
         console.log("Email Already Exists");
-        return res.sendStatus(401);
+        return res.status(401).send("Email Already Exists");
       }
       bcrypt.hash(password, SALTROUND, (err, hash) => {
         if (err) {
@@ -103,8 +103,8 @@ app.post("/login", (req, res) => {
     // console.log(response);
     // validate response
     if (response) {
-      console.log(response[0].uuid);
-      console.log(password, response[0].password);
+      // console.log(response[0].uuid);
+      // console.log(password, response[0].password);
       const validator = await bcrypt.compare(password, response[0].password);
 
       console.log(validator);
@@ -147,6 +147,7 @@ app.post("/login", (req, res) => {
     // res.json({name:req.body.name,password:req.body.password});
     return null;
   });
+
   // bcrypt.compare(password,)
 
   // bcrypt.hash(password, SALTROUND,function(err,hash){
@@ -171,6 +172,23 @@ app.post("/login", (req, res) => {
   //     res.json({name:req.body.name,password:req.body.password});
   // })
   // });
+});
+
+app.get("/getuuid/:email", (req, res) => {
+  const email = req.params.email;
+  // res.send(email);
+
+  const sqlQuery = `select uuid from user where email = ${Connection.escape(
+    email
+  )}`;
+  Connection.query(sqlQuery, async (error, response) => {
+    if (error) {
+      console.log("mysql error: ", error);
+      return res.sendStatus(501);
+    }
+    // console.log(response[0].uuid);
+    res.send(response[0].uuid);
+  });
 });
 // app.post('/p',async (req,res)=>{
 // if(await bcrypt.compare(req.query.password,h)){
@@ -216,11 +234,11 @@ app.post("/post", authenticateToken, (req, res) => {
 });
 
 app.post("/userdata", (req, res) => {
-  const { email } = req.body;
+  const { uuid } = req.body;
 
   // check for the password agaist databse
-  const sqlQuery = `select username,email,uuid,balance,level,xp,pubgid from user where email = ${Connection.escape(
-    email
+  const sqlQuery = `select username,email,uuid,balance,level,xp,pubgid from user where uuid = ${Connection.escape(
+    uuid
   )}`;
   Connection.query(sqlQuery, async (error, response) => {
     if (error) {
@@ -236,23 +254,37 @@ app.put("/edit/:id", (req, res) => {
   const paramuuid = req.params.id;
   // console.log(paramuuid);
   const changeEmail = req.body.email;
-  const changeName = req.body.name;
+  const changeName = req.body.username;
   // const changeEmail = req.body.email;
 
-  const sqlQuery = `update user set ${
-    changeEmail ? `email="${changeEmail}"` : ""
-  } ${changeName && changeEmail ? "," : ""} ${
-    changeName ? `name="${changeName}"` : ""
-  } where uuid = ${Connection.escape(paramuuid)}`;
+  Connection.query(
+    `select email from user where email=${Connection.escape(changeEmail)}`,
+    (error, response) => {
+      if (error) {
+        return res.json(401);
+      }
 
-  Connection.query(sqlQuery, async (error, response) => {
-    if (error) {
-      console.log("mysql error: ", error);
-      return res.sendStatus(501);
+      if (response[0] && response[0].email != null) {
+        console.log("Email Already Exists");
+        return res.status(401).send("Email Already Exists");
+      }
+
+      const sqlQuery = `update user set ${
+        changeEmail ? `email="${changeEmail}"` : ""
+      } ${changeName && changeEmail ? "," : ""} ${
+        changeName ? `username="${changeName}"` : ""
+      } where uuid = ${Connection.escape(paramuuid)}`;
+
+      Connection.query(sqlQuery, async (error1, response1) => {
+        if (error1) {
+          console.log("mysql error: ", error1);
+          return res.sendStatus(501);
+        }
+        console.log("OK");
+        res.send("Good");
+      });
     }
-    console.log("OK");
-    res.send("Good");
-  });
+  );
 });
 
 // let connection = mysql.createConnection({

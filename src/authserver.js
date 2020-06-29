@@ -6,11 +6,15 @@ require("dotenv").config();
 const jwt = require("jsonwebtoken");
 const express = require("express");
 
+// const fetch = require("node-fetch");
+// const axios = require("axios");
+
 const app = express();
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
 // const Cookie = require('js-cookie');
 const corsConfig = require("../configs/corsConfig");
+const { default: Axios } = require("axios");
 
 // const SALTROUND = 10;
 app.use(cookieParser());
@@ -43,24 +47,25 @@ function generateAccessToken(user) {
   return jwt.sign(user, process.env.ACCESS_TOKEN, { expiresIn: "60s" });
 }
 // login token
+
 app.post("/login", async (req, res) => {
   console.log(req.body);
   const { email } = req.body;
   const { password } = req.body;
 
-  // console.log("email:", email, "pass: ", password);
+  // fetch(`http://localhost:5000/getuuid/${email}`, {
+  //   method: "GET",
+  // }).then((res) => console.log(res));
 
-  // authenticate with pass
+  const uuidRes = await Axios.get(`http://localhost:5000/getuuid/${email}`);
 
-  // encrypt and test agaist database and then create token
+  const uuid = uuidRes.data;
 
-  // console.log("hello")
-  // console.log(username)
-  const user = { email };
+  const user = { uuid };
   const token = generateAccessToken(user);
   const refreshToken = jwt.sign(user, process.env.REFRESH_TOKEN);
 
-  redisClient.set(refreshToken, email, redis.print);
+  redisClient.set(refreshToken, uuid, redis.print);
 
   // refreshTokenArray.push(refreshToken);
 
