@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const express = require("express");
 const { v4: uuidv4 } = require("uuid");
 const bcrypt = require("bcrypt");
+const { default: Axios } = require("axios");
 
 const app = express();
 const http = require("http").createServer(app);
@@ -54,6 +55,8 @@ app.post("/register", (req, res) => {
         return res.json(401);
       }
 
+      console.log(response[0]);
+
       if (response[0] && response[0].email != null) {
         console.log("Email Already Exists");
         return res.status(401).send("Email Already Exists");
@@ -75,6 +78,23 @@ app.post("/register", (req, res) => {
               return res.sendStatus(501);
             }
             console.log(result);
+
+            // For Affiliate
+
+            const Reward = 20;
+            const TotalLoginWith = 0;
+            const IsUsedPromo = false;
+
+            Connection.query(
+              "insert into affiliate values(?,?,?,?,?,?)",
+              [uuid, null, Reward, TotalLoginWith, IsUsedPromo, null],
+              (error3, result2) => {
+                if (error3) {
+                  console.log("mysql error : ", error3);
+                  return res.sendStatus(501);
+                }
+              }
+            );
             return res.status(200).send("SuccesFully Created User");
           }
         );
@@ -283,6 +303,157 @@ app.put("/edit/:id", (req, res) => {
         console.log("OK");
         res.send("Good");
       });
+    }
+  );
+});
+
+app.post("/useReff", (req, res) => {
+  const { uuid, loginWith } = req.body;
+
+  console.log(loginWith);
+  Connection.query(
+    `select code,reward,uuid,totalLoginWith from affiliate where code=${Connection.escape(
+      loginWith
+    )}`,
+    (error, response) => {
+      if (error) {
+        console.log(error);
+        return res.json(401);
+      }
+
+      console.log(response[0]);
+      if (response.length > 0) {
+        Connection.query(
+          `select isUsedPromo from affiliate where uuid=${Connection.escape(
+            uuid
+          )}`,
+          (error1, response1) => {
+            if (error1) {
+              console.log(error1);
+              return res.json(401);
+            }
+
+            // console.log(response1[0]);
+            if (response1[0].isUsedPromo == "True") {
+              res.status(401).send("Already Redeemed Code");
+            } else {
+              const sqlQuery = `update affiliate set isUsedPromo="True", isLoggedWith="${loginWith}" where uuid = ${Connection.escape(
+                uuid
+              )}`;
+
+              Connection.query(sqlQuery, async (error2, response2) => {
+                if (error2) {
+                  console.log("mysql error: ", error2);
+                  return res.sendStatus(501);
+                }
+
+                // Axios To Chnage Balance
+
+                const senderUUID = response[0].uuid;
+
+                Connection.query(
+                  `update affiliate set totalLoginWith="${
+                    parseInt(response[0].totalLoginWith) + 1
+                  }" where uuid=${Connection.escape(senderUUID)}`,
+                  (error3, response3) => {
+                    if (error3) {
+                      console.log(error3);
+                      return res.json(401);
+                    }
+
+                    Axios.post(`http://localhost:5000/changeBalance/${uuid}`, {
+                      reward: response[0].reward,
+                    })
+                      .then((res) => console.log(res.data))
+                      .catch((err) => console.log(err));
+
+                    Axios.post(
+                      `http://localhost:5000/changeBalance/${senderUUID}`,
+                      {
+                        reward: response[0].reward,
+                      }
+                    )
+                      .then((res) => console.log(res.data))
+                      .catch((err) => console.log(err));
+
+                    res.send("All Good").status(200);
+                  }
+                );
+              });
+            }
+          }
+        );
+      } else {
+        console.log("Invalid Code");
+        return res.status(401).send("Invalid Code");
+      }
+      // if (response[0] && response[0].code == null) {
+      // console.log("Invalid Code");
+      // return res.status(401).send("Invalid Code");
+      // }
+    }
+  );
+});
+
+app.post("/changeBalance/:uuid", (req, res) => {
+  const uuid = req.params.uuid;
+  const { reward } = req.body;
+
+  Connection.query(
+    `select balance from user where uuid=${Connection.escape(uuid)}`,
+    (error, response) => {
+      if (error) {
+        console.log(error);
+        return res.json(401);
+      }
+
+      console.log(response[0]);
+      const sqlQuery1 = `update user set balance="${
+        parseInt(response[0].balance) + parseInt(reward)
+      }" where uuid = ${Connection.escape(uuid)}`;
+
+      Connection.query(sqlQuery1, async (error3, response3) => {
+        if (error3) {
+          console.log("mysql error: ", error3);
+          return res.sendStatus(501);
+        }
+        res.status(200).send("Balance Changed");
+      });
+    }
+  );
+});
+
+app.post("/createReff/:uuid", (req, res) => {
+  const uuid = req.params.uuid;
+  const { code } = req.body;
+
+  Connection.query(
+    `select code from affiliate where code=${Connection.escape(code)}`,
+    (error, response) => {
+      if (error) {
+        console.log(error);
+        return res.json(401);
+      }
+
+      if (response[0] && response[0].code != null) {
+        console.log("Code Already Taken");
+        return res.send("Code Already Taken").status(401);
+      }
+
+      Connection.query(
+        `update affiliate set code="${code}" where uuid=${Connection.escape(
+          uuid
+        )}`,
+        (error1, response1) => {
+          if (error1) {
+            console.log(code);
+            console.log(error1);
+            return res.json(401);
+          }
+
+          res.send("Code Set").status(200);
+        }
+      );
     }
   );
 });
