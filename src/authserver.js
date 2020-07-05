@@ -167,7 +167,7 @@ app.post("/refresh", async (req, res) => {
       return res.sendStatus(401);
     }
     console.log("response: ", response);
-    jwt.verify(refreshToken, process.env.refreshToken, (err2, value) => {
+    jwt.verify(refreshToken, process.env.REFRESH_TOKEN, (err2, value) => {
       if (err2) {
         console.log("error:", err2);
         return res.sendStatus(401);

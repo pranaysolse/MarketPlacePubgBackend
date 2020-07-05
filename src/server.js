@@ -253,20 +253,53 @@ app.post("/post", authenticateToken, (req, res) => {
   res.json({ response: "done" });
 });
 
-app.post("/userdata", (req, res) => {
-  const { uuid } = req.body;
+// To Get Cookies
+function parseCookies(req, res, next) {
+  var list = {},
+    rc = req.headers.cookie;
 
-  // check for the password agaist databse
-  const sqlQuery = `select username,email,uuid,balance,level,xp,pubgid from user where uuid = ${Connection.escape(
-    uuid
-  )}`;
-  Connection.query(sqlQuery, async (error, response) => {
-    if (error) {
-      console.log("mysql error: ", error);
-      return res.sendStatus(501);
+  console.log(rc);
+
+  rc &&
+    rc.split(";").forEach(function (cookie) {
+      var parts = cookie.split("=");
+      list[parts.shift().trim()] = decodeURI(parts.join("="));
+    });
+
+  res.foundlist = list;
+  next();
+}
+
+app.get("/userdata", parseCookies, (req, res) => {
+  // var cookies = parseCookies(req);
+
+  // console.log(cookies);
+  console.log(res.foundlist);
+
+  const refreshToken = res.foundlist.refreshtoken;
+
+  console.log(refreshToken);
+
+  jwt.verify(refreshToken, process.env.REFRESH_TOKEN, (err2, value) => {
+    if (err2) {
+      console.log("error:", err2.message);
+      return res.status(401).send(err2.message);
     }
-    console.log(response);
-    res.send(response[0]);
+    console.log("value: ", value);
+
+    const uuid = value.uuid;
+    // check for the password agaist databse
+    const sqlQuery = `select username,email,uuid,balance,level,xp,pubgid from user where uuid = ${Connection.escape(
+      uuid
+    )}`;
+    Connection.query(sqlQuery, async (error, response) => {
+      if (error) {
+        console.log("mysql error: ", error);
+        return res.sendStatus(501);
+      }
+      console.log(response);
+      res.send(response[0]);
+    });
   });
 });
 
@@ -329,58 +362,66 @@ app.post("/useReff", (req, res) => {
           )}`,
           (error1, response1) => {
             if (error1) {
-              console.log(error1);
+              console.log(error1.message);
               return res.json(401);
             }
 
-            // console.log(response1[0]);
-            if (response1[0].isUsedPromo == "True") {
-              res.status(401).send("Already Redeemed Code");
-            } else {
-              const sqlQuery = `update affiliate set isUsedPromo="True", isLoggedWith="${loginWith}" where uuid = ${Connection.escape(
-                uuid
-              )}`;
+            if (response1.length > 0) {
+              if (response1[0].isUsedPromo == "True") {
+                res.status(401).send("Already Redeemed Code");
+              } else {
+                const sqlQuery = `update affiliate set isUsedPromo="True", isLoggedWith="${loginWith}" where uuid = ${Connection.escape(
+                  uuid
+                )}`;
 
-              Connection.query(sqlQuery, async (error2, response2) => {
-                if (error2) {
-                  console.log("mysql error: ", error2);
-                  return res.sendStatus(501);
-                }
-
-                // Axios To Chnage Balance
-
-                const senderUUID = response[0].uuid;
-
-                Connection.query(
-                  `update affiliate set totalLoginWith="${
-                    parseInt(response[0].totalLoginWith) + 1
-                  }" where uuid=${Connection.escape(senderUUID)}`,
-                  (error3, response3) => {
-                    if (error3) {
-                      console.log(error3);
-                      return res.json(401);
-                    }
-
-                    Axios.post(`http://localhost:5000/changeBalance/${uuid}`, {
-                      reward: response[0].reward,
-                    })
-                      .then((res) => console.log(res.data))
-                      .catch((err) => console.log(err));
-
-                    Axios.post(
-                      `http://localhost:5000/changeBalance/${senderUUID}`,
-                      {
-                        reward: response[0].reward,
-                      }
-                    )
-                      .then((res) => console.log(res.data))
-                      .catch((err) => console.log(err));
-
-                    res.send("All Good").status(200);
+                Connection.query(sqlQuery, async (error2, response2) => {
+                  if (error2) {
+                    console.log("mysql error: ", error2);
+                    return res.sendStatus(501);
                   }
-                );
-              });
+
+                  // Axios To Chnage Balance
+
+                  const senderUUID = response[0].uuid;
+
+                  Connection.query(
+                    `update affiliate set totalLoginWith="${
+                      parseInt(response[0].totalLoginWith) + 1
+                    }" where uuid=${Connection.escape(senderUUID)}`,
+                    (error3, response3) => {
+                      if (error3) {
+                        console.log(error3);
+                        return res.json(401);
+                      }
+
+                      Axios.post(
+                        `http://localhost:5000/changeBalance/${uuid}`,
+                        {
+                          reward: response[0].reward,
+                        }
+                      )
+                        .then((res) => console.log(res.data))
+                        .catch((err) => console.log(err));
+
+                      Axios.post(
+                        `http://localhost:5000/changeBalance/${senderUUID}`,
+                        {
+                          reward: response[0].reward,
+                        }
+                      )
+                        .then((res) => console.log(res.data))
+                        .catch((err) => console.log(err));
+
+                      res.send("All Good").status(200);
+                    }
+                  );
+                });
+              }
+            } else {
+              console.log("No User Found");
+              res.status(401).send("No User Found");
             }
+            // console.log(response1[0]);
           }
         );
       } else {
