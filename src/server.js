@@ -101,7 +101,7 @@ app.post("/register", parseCookies, (req, res) => {
   jwt.verify(refresh_token, process.env.REFRESH_TOKEN, (err2, value) => {
     if (err2) {
       console.log("error:", err2.message);
-      return res.status(401).send(err2.message);
+      return res.send({ code: 401, msg: "Try Refreshing Page" }).status(401);
     }
     Connection.query(
       `select email from user where email=${Connection.escape(email)}`,
@@ -114,114 +114,165 @@ app.post("/register", parseCookies, (req, res) => {
 
         if (response[0] && response[0].email != null) {
           console.log("Email Already Exists");
-          return res.status(401).send("Email Already Exists");
+          return res
+            .send({ code: 401, msg: "Email Already Exists" })
+            .status(401);
         }
-        bcrypt.hash(password, SALTROUND, (err, hash) => {
-          if (err) {
-            console.log("error in hashing: ", err);
-            return res.sendStatus(501);
-          }
 
-          // let sql =
-          // inset all the data into the table got from the register
-          Connection.query(
-            "insert into user values(?,?,?,?,?,?,?,?)",
-            [uuid, username, hash, email, pubgid, balance, level, xp],
-            (error2, result) => {
-              if (error2) {
-                console.log("mysql error : ", error2);
+        Connection.query(
+          `select pubgid from user where pubgid=${Connection.escape(pubgid)}`,
+          (error1, response1) => {
+            if (error1) {
+              return res.json(401);
+            }
+
+            console.log(response1[0]);
+
+            if (response1[0] && response1[0].pubgid != null) {
+              console.log("PubgId Already Exists");
+              return res
+                .send({ code: 401, msg: "Pubg ID Already Taken" })
+                .status(401);
+            }
+
+            bcrypt.hash(password, SALTROUND, (err, hash) => {
+              if (err) {
+                console.log("error in hashing: ", err);
                 return res.sendStatus(501);
               }
-              console.log(result);
 
-              // For Affiliate
-
-              const Reward = 20;
-              const TotalLoginWith = 0;
-              const IsUsedPromo = false;
-
+              // let sql =
+              // inset all the data into the table got from the register
               Connection.query(
-                "insert into affiliate values(?,?,?,?,?,?)",
-                [uuid, null, Reward, TotalLoginWith, IsUsedPromo, null],
-                (error3, result2) => {
-                  if (error3) {
-                    console.log("mysql error : ", error3);
+                "insert into user values(?,?,?,?,?,?,?,?)",
+                [uuid, username, hash, email, pubgid, balance, level, xp],
+                (error2, result) => {
+                  if (error2) {
+                    console.log("mysql error : ", error2);
                     return res.sendStatus(501);
                   }
+                  console.log(result);
+
+                  // For Affiliate
+
+                  const Reward = 20;
+                  const TotalLoginWith = 0;
+                  const IsUsedPromo = false;
+
+                  Connection.query(
+                    "insert into affiliate values(?,?,?,?,?,?)",
+                    [uuid, null, Reward, TotalLoginWith, IsUsedPromo, null],
+                    (error3, result2) => {
+                      if (error3) {
+                        console.log("mysql error : ", error3);
+                        return res.sendStatus(501);
+                      }
+                    }
+                  );
+                  return res
+                    .status(200)
+                    .send({ code: 200, msg: "SuccesFully Created User" });
                 }
               );
-              return res.status(200).send("SuccesFully Created User");
-            }
-          );
-          return null;
-        });
-        return null;
+              return null;
+            });
+            return null;
+          }
+        );
       }
     );
   });
 });
 
-app.post("/login", (req, res) => {
+app.post("/login", parseCookies, (req, res) => {
   const { email } = req.body;
   const { password } = req.body;
   // console.log(password);
   // check for the password agaist databse
-  const sqlQuery = `select uuid,password from user where email = ${Connection.escape(
-    email
-  )}`;
-  Connection.query(sqlQuery, async (error, response) => {
-    if (error) {
-      console.log("mysql error: ", error);
-      return res.sendStatus(501);
+
+  const refresh_token = res.Cookies.__refresh_token;
+
+  jwt.verify(refresh_token, process.env.REFRESH_TOKEN, (err2, value) => {
+    if (err2) {
+      console.log("error:", err2.message);
+      return res.send({ code: 401, msg: "Try Refreshing Page" }).status(401);
     }
-    console.log(response);
+    Connection.query(
+      `select email from user where email=${Connection.escape(email)}`,
+      (error1, response1) => {
+        if (error1) {
+          return res.json(401);
+        }
 
-    // console.log(response);
-    // validate response
-    if (response) {
-      // console.log(response[0].uuid);
-      // console.log(password, response[0].password);
-      const validator = await bcrypt.compare(password, response[0].password);
+        if (response1.length > 0) {
+          const sqlQuery = `select uuid,password from user where email = ${Connection.escape(
+            email
+          )}`;
+          Connection.query(sqlQuery, async (error, response) => {
+            if (error) {
+              console.log("mysql error: ", error);
+              return res.sendStatus(501);
+            }
+            console.log(response);
 
-      console.log(validator);
-      // do stuff here or it wiill be syncronous
-      // axios.post('http://localhost:4000/login',{
-      //     name:response[0].uuid,
-      //     password:response[0].password
-      // })
-      // .then((response)=>{
-      //     console.log("axios response: ",response)
-      // })
-      // .catch((error)=>{
-      //     console.log(error);
-      // });console.
+            // console.log(response);
+            // validate response
+            if (response) {
+              // console.log(response[0].uuid);
+              // console.log(password, response[0].password);
+              const validator = await bcrypt.compare(
+                password,
+                response[0].password
+              );
 
-      if (!validator) {
-        res.status(401).send("Password Not Match");
-        console.log("password not match");
-      } else {
-        console.log("redirecting to authserver");
+              console.log(validator);
+              // do stuff here or it wiill be syncronous
+              // axios.post('http://localhost:4000/login',{
+              //     name:response[0].uuid,
+              //     password:response[0].password
+              // })
+              // .then((response)=>{
+              //     console.log("axios response: ",response)
+              // })
+              // .catch((error)=>{
+              //     console.log(error);
+              // });console.
 
-        // res.send(response[0].uuid);
+              if (!validator) {
+                res.send({ code: 401, msg: "Password Not Match" }).status(401);
+                console.log("password not match");
+              } else {
+                console.log("redirecting to authserver");
 
-        res.redirect(307, "http://localhost:4000/login");
+                // res.send(response[0].uuid);
 
-        // res.send("passmatch");
+                res.redirect(307, "http://localhost:4000/login");
 
-        // axios stuff
-        // fetch heere
-        console.log(
-          "axios will take response from authserver: logging response: ",
-          response[0].uuid,
-          response[0].password
-        );
+                // res.send("passmatch");
+
+                // axios stuff
+                // fetch heere
+                console.log(
+                  "axios will take response from authserver: logging response: ",
+                  response[0].uuid,
+                  response[0].password
+                );
+              }
+            } else {
+              res.send({ code: 401, msg: "Email Not Found" }).status(401);
+            }
+
+            // res.json({name:req.body.name,password:req.body.password});
+            return null;
+          });
+        } else {
+          console.log("Email Does Not Exists");
+          return res
+            .send({ code: 401, msg: "Email Does Not Exists" })
+            .status(401);
+        }
       }
-    } else {
-      res.status(401).send("Email Not Found");
-    }
-
-    // res.json({name:req.body.name,password:req.body.password});
-    return null;
+    );
   });
 
   // bcrypt.compare(password,)
@@ -329,23 +380,6 @@ app.get("/getuuid/:email", (req, res) => {
     res.send(response[0].uuid);
   });
 });
-// app.post('/p',async (req,res)=>{
-// if(await bcrypt.compare(req.query.password,h)){
-//     res.send("logged in");
-// }})
-
-// let posts = {
-//     name:'pranay',
-//     age:'20'
-// }
-
-// app.post('/refresh',(req,res)=>{
-//     const rToken = req.body.token;
-//     console.log(rToken);
-//     console.log(req.body);
-//     // console.log(req)
-//     res.json({rToken:rToken});
-// })
 
 function authenticateToken(req, res, next) {
   // console.log("hello")
@@ -382,7 +416,7 @@ app.get("/userdata", parseCookies, (req, res) => {
   jwt.verify(access_token, process.env.ACCESS_TOKEN, (err2, value) => {
     if (err2) {
       console.log("error:", err2.message);
-      return res.status(401).send(err2.message);
+      return res.send({ code: 401, msg: "Try Refreshing Page" }).status(401);
     }
     console.log("value: ", value);
 
@@ -406,7 +440,7 @@ app.put("/edit/:id", (req, res) => {
   const paramuuid = req.params.id;
   // console.log(paramuuid);
   const changeEmail = req.body.email;
-  const changeName = req.body.username;
+
   // const changeEmail = req.body.email;
 
   Connection.query(
@@ -421,11 +455,15 @@ app.put("/edit/:id", (req, res) => {
         return res.status(401).send("Email Already Exists");
       }
 
-      const sqlQuery = `update user set ${
-        changeEmail ? `email="${changeEmail}"` : ""
-      } ${changeName && changeEmail ? "," : ""} ${
-        changeName ? `username="${changeName}"` : ""
-      } where uuid = ${Connection.escape(paramuuid)}`;
+      // const sqlQuery = `update user set ${
+      //   changeEmail ? `email="${changeEmail}"` : ""
+      // } ${changeName && changeEmail ? "," : ""} ${
+      //   changeName ? `username="${changeName}"` : ""
+      // } where uuid = ${Connection.escape(paramuuid)}`;
+
+      const sqlQuery = `update user set email="${changeEmail}" where uuid = ${Connection.escape(
+        paramuuid
+      )}`;
 
       Connection.query(sqlQuery, async (error1, response1) => {
         if (error1) {

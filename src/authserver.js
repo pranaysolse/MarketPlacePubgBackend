@@ -78,7 +78,7 @@ app.post("/login", async (req, res) => {
     .cookie("__access_token", access_token, {
       //  httpOnly:true
     })
-    .send("send cookie");
+    .send({ code: 200, msg: "Login Success" });
   console.log("cookie created succesfully");
 });
 
