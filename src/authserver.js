@@ -63,19 +63,19 @@ app.post("/login", async (req, res) => {
 
   const user = { uuid };
   const token = generateAccessToken(user);
-  const refreshToken = jwt.sign(user, process.env.REFRESH_TOKEN);
+  const access_token = jwt.sign(user, process.env.ACCESS_TOKEN);
 
-  redisClient.set(refreshToken, uuid, redis.print);
+  redisClient.set(access_token, uuid, redis.print);
 
   // refreshTokenArray.push(refreshToken);
 
   console.log("both tokens \n", {
     accessToken: token,
-    refreshtoken: refreshToken,
+    access_token,
   });
 
   res
-    .cookie("refreshtoken", refreshToken, {
+    .cookie("__access_token", access_token, {
       //  httpOnly:true
     })
     .send("send cookie");

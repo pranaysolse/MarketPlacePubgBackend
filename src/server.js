@@ -6,12 +6,19 @@ const { v4: uuidv4 } = require("uuid");
 const bcrypt = require("bcrypt");
 const { default: Axios } = require("axios");
 
+let rp = require("request-promise");
+
+const CookieJar = rp.jar();
+rp = rp.defaults({ jar: CookieJar });
+
 const app = express();
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
 const config = require("../configs/MysqlConfig");
 require("dotenv").config({ path: "./configs/.env" });
 const corsConfig = require("../configs/corsConfig");
+const { stringify } = require("querystring");
+const { urlencoded } = require("body-parser");
 
 console.log(config);
 const SALTROUND = 10;
@@ -19,6 +26,10 @@ app.use(express.json());
 app.use(cors(corsConfig.config));
 const Connection = mysql.createConnection(config.Config);
 Connection.connect();
+
+const axioConfig = {
+  withCredentials: true,
+};
 
 io.on("connection", (socket) => {
   console.log("User Connected");
@@ -35,10 +46,49 @@ io.on("connection", (socket) => {
   });
 });
 
-app.post("/register", (req, res) => {
+// To Get Cookies
+function parseCookies(req, res, next) {
+  var list = {},
+    rc = req.headers.cookie;
+
+  rc &&
+    rc.split(";").forEach(function (cookie) {
+      var parts = cookie.split("=");
+      list[parts.shift().trim()] = decodeURI(parts.join("="));
+    });
+
+  res.Cookies = list;
+  // console.log(list);
+  next();
+}
+
+app.get("/onpageload", GetMidasCookie, (req, res) => {
+  const data = {
+    uuid: uuidv4(),
+    host: "https://pubgtornado.com",
+  };
+
+  const ctoken = res.csrf;
+
+  const refresh_token = jwt.sign(data, process.env.REFRESH_TOKEN, {
+    expiresIn: "5m",
+  });
+  console.log(refresh_token);
+  res
+    .cookie("__refresh_token", refresh_token)
+    .cookie("__ctoken", ctoken)
+    .send("Set Refresh,Ctoken Token");
+});
+
+app.post("/register", parseCookies, (req, res) => {
   // make middleware for this stuff like crearing the required
   // uuid storing the password in the database
   // validate if user is real aka two step authenticatipons and stuff
+
+  const refresh_token = res.Cookies.__refresh_token;
+
+  console.log(refresh_token);
+
   const { username } = req.body;
   const { password } = req.body;
   const { email } = req.body;
@@ -48,61 +98,67 @@ app.post("/register", (req, res) => {
   const xp = 0;
   const uuid = uuidv4();
 
-  Connection.query(
-    `select email from user where email=${Connection.escape(email)}`,
-    (error, response) => {
-      if (error) {
-        return res.json(401);
-      }
-
-      console.log(response[0]);
-
-      if (response[0] && response[0].email != null) {
-        console.log("Email Already Exists");
-        return res.status(401).send("Email Already Exists");
-      }
-      bcrypt.hash(password, SALTROUND, (err, hash) => {
-        if (err) {
-          console.log("error in hashing: ", err);
-          return res.sendStatus(501);
+  jwt.verify(refresh_token, process.env.REFRESH_TOKEN, (err2, value) => {
+    if (err2) {
+      console.log("error:", err2.message);
+      return res.status(401).send(err2.message);
+    }
+    Connection.query(
+      `select email from user where email=${Connection.escape(email)}`,
+      (error, response) => {
+        if (error) {
+          return res.json(401);
         }
 
-        // let sql =
-        // inset all the data into the table got from the register
-        Connection.query(
-          "insert into user values(?,?,?,?,?,?,?,?)",
-          [uuid, username, hash, email, pubgid, balance, level, xp],
-          (error2, result) => {
-            if (error2) {
-              console.log("mysql error : ", error2);
-              return res.sendStatus(501);
-            }
-            console.log(result);
+        console.log(response[0]);
 
-            // For Affiliate
-
-            const Reward = 20;
-            const TotalLoginWith = 0;
-            const IsUsedPromo = false;
-
-            Connection.query(
-              "insert into affiliate values(?,?,?,?,?,?)",
-              [uuid, null, Reward, TotalLoginWith, IsUsedPromo, null],
-              (error3, result2) => {
-                if (error3) {
-                  console.log("mysql error : ", error3);
-                  return res.sendStatus(501);
-                }
-              }
-            );
-            return res.status(200).send("SuccesFully Created User");
+        if (response[0] && response[0].email != null) {
+          console.log("Email Already Exists");
+          return res.status(401).send("Email Already Exists");
+        }
+        bcrypt.hash(password, SALTROUND, (err, hash) => {
+          if (err) {
+            console.log("error in hashing: ", err);
+            return res.sendStatus(501);
           }
-        );
+
+          // let sql =
+          // inset all the data into the table got from the register
+          Connection.query(
+            "insert into user values(?,?,?,?,?,?,?,?)",
+            [uuid, username, hash, email, pubgid, balance, level, xp],
+            (error2, result) => {
+              if (error2) {
+                console.log("mysql error : ", error2);
+                return res.sendStatus(501);
+              }
+              console.log(result);
+
+              // For Affiliate
+
+              const Reward = 20;
+              const TotalLoginWith = 0;
+              const IsUsedPromo = false;
+
+              Connection.query(
+                "insert into affiliate values(?,?,?,?,?,?)",
+                [uuid, null, Reward, TotalLoginWith, IsUsedPromo, null],
+                (error3, result2) => {
+                  if (error3) {
+                    console.log("mysql error : ", error3);
+                    return res.sendStatus(501);
+                  }
+                }
+              );
+              return res.status(200).send("SuccesFully Created User");
+            }
+          );
+          return null;
+        });
         return null;
-      });
-      return null;
-    }
-  );
+      }
+    );
+  });
 });
 
 app.post("/login", (req, res) => {
@@ -194,6 +250,69 @@ app.post("/login", (req, res) => {
   // });
 });
 
+async function GetMidasCookie(req, res, next) {
+  const result = await rp.get("https://www.midasbuy.com/midasbuy/in/buy/pubgm");
+
+  const Cookies = CookieJar.getCookieString(
+    "https://www.midasbuy.com/midasbuy/in/buy/pubgm"
+  );
+
+  const SpilltedCookie = Cookies.split("csrf=");
+
+  res.csrf = SpilltedCookie[1];
+  // console.log(res.Cookie);
+  next();
+}
+
+app.get("/getpubgname/:pubgid", parseCookies, async (req, res) => {
+  // const Cookies = GetMidasCookie();
+  // console.log(res.Cookie);
+
+  const pubgid = req.params.pubgid;
+
+  const ctoken = res.Cookies.__ctoken;
+
+  // console.log(ctoken);
+
+  try {
+    const Resp = await Axios.get(
+      `https://www.midasbuy.com/interface/getCharac?ctoken=${ctoken}&appid=1450015065&currency_type=INR&country=IN&midasbuyArea=SouthAsia&sc=&from=&task_token=&pf=mds_hkweb_pc-v2-android-midasweb-midasbuy&zoneid=1&_id=0.7596290802339253&shopcode=midasbuy&cgi_extend=&buyType=save&openid=${pubgid}`,
+      axioConfig
+    );
+
+    const ret = Resp.data.ret;
+
+    if (ret == 2002) {
+      const usefullData = {
+        ret: ret,
+        msg: "Invalid ID",
+      };
+      res.send(usefullData);
+    } else {
+      const decoded = decodeURIComponent(Resp.data.info.charac_name);
+      const username = decoded;
+      const haveRoyalPass = Resp.data.info.pass_is_buy;
+
+      const usefullData = {
+        ret,
+        username,
+        haveRoyalPass,
+      };
+
+      // console.log(username);
+      res.send(usefullData);
+    }
+  } catch {
+    console.log("Failed To Fetch");
+
+    const usefullData = {
+      ret: 2002,
+      msg: "Failed To Fetch",
+    };
+    res.send(usefullData);
+  }
+});
+
 app.get("/getuuid/:email", (req, res) => {
   const email = req.params.email;
   // res.send(email);
@@ -253,34 +372,14 @@ app.post("/post", authenticateToken, (req, res) => {
   res.json({ response: "done" });
 });
 
-// To Get Cookies
-function parseCookies(req, res, next) {
-  var list = {},
-    rc = req.headers.cookie;
-
-  console.log(rc);
-
-  rc &&
-    rc.split(";").forEach(function (cookie) {
-      var parts = cookie.split("=");
-      list[parts.shift().trim()] = decodeURI(parts.join("="));
-    });
-
-  res.foundlist = list;
-  next();
-}
-
 app.get("/userdata", parseCookies, (req, res) => {
   // var cookies = parseCookies(req);
 
   // console.log(cookies);
-  console.log(res.foundlist);
 
-  const refreshToken = res.foundlist.refreshtoken;
+  const access_token = res.Cookies.__access_token;
 
-  console.log(refreshToken);
-
-  jwt.verify(refreshToken, process.env.REFRESH_TOKEN, (err2, value) => {
+  jwt.verify(access_token, process.env.ACCESS_TOKEN, (err2, value) => {
     if (err2) {
       console.log("error:", err2.message);
       return res.status(401).send(err2.message);
@@ -368,7 +467,7 @@ app.post("/useReff", (req, res) => {
 
             if (response1.length > 0) {
               if (response1[0].isUsedPromo == "True") {
-                res.status(401).send("Already Redeemed Code");
+                res.send("Already Redeemed Code").status(401);
               } else {
                 const sqlQuery = `update affiliate set isUsedPromo="True", isLoggedWith="${loginWith}" where uuid = ${Connection.escape(
                   uuid
@@ -419,14 +518,14 @@ app.post("/useReff", (req, res) => {
               }
             } else {
               console.log("No User Found");
-              res.status(401).send("No User Found");
+              res.send("No User Found").status(401);
             }
             // console.log(response1[0]);
           }
         );
       } else {
         console.log("Invalid Code");
-        return res.status(401).send("Invalid Code");
+        return res.send("Invalid Code").status(401);
       }
       // if (response[0] && response[0].code == null) {
       // console.log("Invalid Code");
@@ -498,6 +597,17 @@ app.post("/createReff/:uuid", (req, res) => {
     }
   );
 });
+
+// app.get("/getjwt", (req, res) => {
+//   const data = {
+//     "appid": "1450015065",
+//     "host": "www.midasbuy.com",
+//     "ts": 1594013453393,
+//   };
+//   const refreshToken = jwt.sign(data, "1450015065");
+
+//   res.send(refreshToken);
+// });
 
 // let connection = mysql.createConnection({
 //     host:'localhost',
