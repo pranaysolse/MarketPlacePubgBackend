@@ -5,6 +5,10 @@ const express = require("express");
 const { v4: uuidv4 } = require("uuid");
 const bcrypt = require("bcrypt");
 const { default: Axios } = require("axios");
+const passport = require("passport");
+const SteamStrategy = require("passport-steam").Strategy;
+const FacebookStrategy = require("passport-facebook").Strategy;
+const session = require("express-session");
 
 let rp = require("request-promise");
 
@@ -12,6 +16,7 @@ const CookieJar = rp.jar();
 rp = rp.defaults({ jar: CookieJar });
 
 const app = express();
+const Router = express.Router();
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
 const config = require("../configs/MysqlConfig");
@@ -31,6 +36,233 @@ const axioConfig = {
   withCredentials: true,
 };
 
+// app.use((req, res, next) => {
+//   res.header("Access-Control-Allow-Origin", "*");
+//   next();
+// });
+
+// FaceBook Strategy
+// passport.use(
+//   new FacebookStrategy(
+//     {
+//       clientID: "2591197717762295",
+//       clientSecret: "9b85cbe9a4f25444350b0514c20cfb78",
+//       callbackURL: "http://localhost:5000/auth/facebook/callback",
+//     },
+//     function (accessToken, refreshToken, profile, cb) {
+//       return cb(null, profile);
+//     }
+//   )
+// );
+
+// Steam Part
+passport.use(
+  new SteamStrategy(
+    {
+      returnURL: "http://localhost:5000/auth/steam/return",
+      realm: "http://localhost:5000/",
+      apiKey: process.env.SteamApiKey,
+    },
+    (identifier, profile, done) => {
+      return done(null, profile);
+    }
+  )
+);
+
+app.use(
+  session({
+    key: "session_id",
+    secret: "Ritik",
+    resave: true,
+    saveUninitialized: true,
+    cookie: {
+      maxAge: 259200000,
+    },
+  })
+);
+
+passport.serializeUser((user, done) => {
+  done(null, user._json);
+});
+
+passport.deserializeUser((obj, done) => {
+  done(null, obj);
+});
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+// app.route.get(
+//   /^\/auth\/steam(\/return)?$/,
+//   passport.authenticate("steam", {
+//     failureRedirect: "/",
+//   }),
+//   (req, res) => {
+//     res.send("Good");
+//   }
+// );
+
+// app.get("/auth/facebook", passport.authenticate("facebook"));
+
+// app.get("/auth/facebook/callback", passport.authenticate("facebook"), function (
+//   req,
+//   res
+// ) {
+//   // Successful authentication, redirect home.
+//   res.redirect("http://localhost:3000/login");
+// });
+
+app.get("/auth/steam/", passport.authenticate("steam"));
+
+app.get(
+  "/auth/steam/return",
+  passport.authenticate("steam"),
+  parseCookies,
+  function (req, res) {
+    // Successful authentication, redirect home.
+
+    const access_token = res.Cookies.__access_token;
+
+    jwt.verify(access_token, process.env.ACCESS_TOKEN, (err, value) => {
+      if (err) {
+        console.log("error:", err.message);
+        return res.send({ code: 401, msg: "Unauthorized" }).status(401);
+      } else {
+        // console.log(value);
+        // console.log(req.user._json);
+        try {
+          const uuid = value.uuid;
+          const {
+            steamid,
+            personaname,
+            profileurl,
+            avatar,
+            avatarmedium,
+            avatarfull,
+            avatarhash,
+            realname,
+            loccountrycode,
+          } = req.user._json;
+
+          // Checking For Already Logged In Or Not
+          Connection.query(
+            `select steamLogin,username from user where uuid=${Connection.escape(
+              uuid
+            )}`,
+            (error, response) => {
+              if (error) {
+                return res.json(401);
+              }
+              if (response.length > 0) {
+                // console.log(response);
+
+                if (response[0].steamLogin === 0) {
+                  const username = response[0].username;
+
+                  Connection.query(
+                    `insert into steaminfo values(?,?,?,?,?,?,?,?,?,?,?)`,
+                    [
+                      steamid,
+                      personaname,
+                      profileurl,
+                      avatar,
+                      avatarmedium,
+                      avatarfull,
+                      avatarhash,
+                      realname,
+                      loccountrycode,
+                      uuid,
+                      username,
+                    ],
+                    (error1, response1) => {
+                      if (error1) {
+                        return res.json(401);
+                      }
+                      Connection.query(
+                        `update user set steamLogin = 1 where uuid=${Connection.escape(
+                          uuid
+                        )}`,
+                        (error3, response3) => {
+                          if (error3) {
+                            return res.json(401);
+                          }
+                          res.redirect("http://localhost:3000/Home/Deposit/Steam");
+                        }
+                      );
+                    }
+                  );
+                } else {
+                  console.log(response);
+                  res.send({ code: 401, msg: "Already Logged In" });
+                }
+              } else {
+                res.send({ code: 401, msg: "Unauthorized" });
+              }
+            }
+          );
+        } catch (err2) {
+          console.log(err2);
+        }
+      }
+    });
+  }
+);
+
+app.get("/checkSteam", parseCookies, (req, res) => {
+  const access_token = res.Cookies.__access_token;
+
+  jwt.verify(access_token, process.env.ACCESS_TOKEN, (err, value) => {
+    if (err) {
+      console.log("error:", err.message);
+      return res.send({ code: 401, msg: "Unauthorized" }).status(401);
+    } else {
+      // Check For Login
+      try {
+        const uuid = value.uuid;
+        Connection.query(
+          `select steamLogin from user where uuid=${Connection.escape(uuid)}`,
+          (error, response) => {
+            if (error) {
+              return res.json(401);
+            }
+            if (response.length > 0) {
+              // console.log(response);
+
+              if (response[0].steamLogin === 0) {
+                res.send({ code: 200, msg: "Steam Not Logged In", islogin: 0 });
+              } else {
+                Connection.query(
+                  `select * from steaminfo where uuid=${Connection.escape(
+                    uuid
+                  )}`,
+                  (error1, response1) => {
+                    if (error1) {
+                      return res.json(401);
+                    }
+                    if (response1.length > 0) {
+                      // console.log(response);
+                      res.send({
+                        code: 200,
+                        msg: "Steam Logged In",
+                        islogin: 1,
+                        steamDatas: response1[0],
+                      });
+                    }
+                  }
+                );
+              }
+            }
+          }
+        );
+      } catch (err) {
+        console.log(err);
+      }
+    }
+  });
+});
+
+// Socket Part
+
 io.on("connection", (socket) => {
   console.log("User Connected");
 
@@ -45,6 +277,8 @@ io.on("connection", (socket) => {
     console.log("User Disconnect");
   });
 });
+
+// Main Part
 
 // To Get Cookies
 function parseCookies(req, res, next) {
@@ -62,6 +296,19 @@ function parseCookies(req, res, next) {
   next();
 }
 
+app.get("/verifyLogin", parseCookies, (req, res) => {
+  const access_token = res.Cookies.__access_token;
+
+  jwt.verify(access_token, process.env.ACCESS_TOKEN, (err2, value) => {
+    if (err2) {
+      console.log("error:", err2.message);
+      return res.send({ code: 401, msg: "Unauthorized" }).status(401);
+    } else {
+      res.send({ code: 200, msg: "Success Login" });
+    }
+  });
+});
+
 app.get("/onpageload", GetMidasCookie, (req, res) => {
   const data = {
     uuid: uuidv4(),
@@ -73,7 +320,7 @@ app.get("/onpageload", GetMidasCookie, (req, res) => {
   const refresh_token = jwt.sign(data, process.env.REFRESH_TOKEN, {
     expiresIn: "5m",
   });
-  console.log(refresh_token);
+  // console.log(refresh_token);
   res
     .cookie("__refresh_token", refresh_token)
     .cookie("__ctoken", ctoken)
@@ -302,17 +549,23 @@ app.post("/login", parseCookies, (req, res) => {
 });
 
 async function GetMidasCookie(req, res, next) {
-  const result = await rp.get("https://www.midasbuy.com/midasbuy/in/buy/pubgm");
+  try {
+    const result = await rp.get(
+      "https://www.midasbuy.com/midasbuy/in/buy/pubgm"
+    );
 
-  const Cookies = CookieJar.getCookieString(
-    "https://www.midasbuy.com/midasbuy/in/buy/pubgm"
-  );
+    const Cookies = CookieJar.getCookieString(
+      "https://www.midasbuy.com/midasbuy/in/buy/pubgm"
+    );
 
-  const SpilltedCookie = Cookies.split("csrf=");
+    const SpilltedCookie = Cookies.split("csrf=");
 
-  res.csrf = SpilltedCookie[1];
-  // console.log(res.Cookie);
-  next();
+    res.csrf = SpilltedCookie[1];
+    // console.log(res.Cookie);
+    next();
+  } catch (err) {
+    console.log(err);
+  }
 }
 
 app.get("/getpubgname/:pubgid", parseCookies, async (req, res) => {
@@ -477,128 +730,183 @@ app.put("/edit/:id", (req, res) => {
   );
 });
 
-app.post("/useReff", (req, res) => {
-  const { uuid, loginWith } = req.body;
+app.post("/useReff", parseCookies, (req, res) => {
+  const { loginWith } = req.body;
 
   console.log(loginWith);
-  Connection.query(
-    `select code,reward,uuid,totalLoginWith from affiliate where code=${Connection.escape(
-      loginWith
-    )}`,
-    (error, response) => {
-      if (error) {
-        console.log(error);
-        return res.json(401);
-      }
+  const access_token = res.Cookies.__access_token;
 
-      console.log(response[0]);
-      if (response.length > 0) {
-        Connection.query(
-          `select isUsedPromo from affiliate where uuid=${Connection.escape(
-            uuid
-          )}`,
-          (error1, response1) => {
-            if (error1) {
-              console.log(error1.message);
-              return res.json(401);
-            }
+  console.log(access_token);
 
-            if (response1.length > 0) {
-              if (response1[0].isUsedPromo == "True") {
-                res.send("Already Redeemed Code").status(401);
-              } else {
-                const sqlQuery = `update affiliate set isUsedPromo="True", isLoggedWith="${loginWith}" where uuid = ${Connection.escape(
-                  uuid
-                )}`;
+  jwt.verify(access_token, process.env.ACCESS_TOKEN, (err, value) => {
+    if (err) {
+      console.log("error:", err.message);
+      return res.send({ code: 401, msg: "Try Refreshing Page" }).status(401);
+    }
+    console.log("value: ", value);
 
-                Connection.query(sqlQuery, async (error2, response2) => {
-                  if (error2) {
-                    console.log("mysql error: ", error2);
-                    return res.sendStatus(501);
-                  }
+    const uuid = value.uuid;
+    Connection.query(
+      `select code,reward,uuid,totalLoginWith from affiliate where code=${Connection.escape(
+        loginWith
+      )}`,
+      (error, response) => {
+        if (error) {
+          console.log(error);
+          return res.json(401);
+        }
 
-                  // Axios To Chnage Balance
+        console.log(response[0]);
+        if (response.length > 0) {
+          Connection.query(
+            `select isUsedPromo,code from affiliate where uuid=${Connection.escape(
+              uuid
+            )}`,
+            (error1, response1) => {
+              if (error1) {
+                console.log(error1.message);
+                return res.json(401);
+              }
 
-                  const senderUUID = response[0].uuid;
+              if (response1.length > 0) {
+                if (response1[0].isUsedPromo == "True") {
+                  res
+                    .send({ code: 401, msg: "Already Redeemed Code" })
+                    .status(401);
+                } else {
+                  if (response1[0].code == loginWith) {
+                    res
+                      .send({ code: 401, msg: "Cannot Use Own Code" })
+                      .status(401);
+                  } else {
+                    const sqlQuery = `update affiliate set isUsedPromo="True", isLoggedWith="${loginWith}" where uuid = ${Connection.escape(
+                      uuid
+                    )}`;
 
-                  Connection.query(
-                    `update affiliate set totalLoginWith="${
-                      parseInt(response[0].totalLoginWith) + 1
-                    }" where uuid=${Connection.escape(senderUUID)}`,
-                    (error3, response3) => {
-                      if (error3) {
-                        console.log(error3);
-                        return res.json(401);
+                    Connection.query(sqlQuery, async (error2, response2) => {
+                      if (error2) {
+                        console.log("mysql error: ", error2);
+                        return res.sendStatus(501);
                       }
 
-                      Axios.post(
-                        `http://localhost:5000/changeBalance/${uuid}`,
-                        {
-                          reward: response[0].reward,
-                        }
-                      )
-                        .then((res) => console.log(res.data))
-                        .catch((err) => console.log(err));
+                      // Axios To Chnage Balance
 
-                      Axios.post(
-                        `http://localhost:5000/changeBalance/${senderUUID}`,
-                        {
-                          reward: response[0].reward,
-                        }
-                      )
-                        .then((res) => console.log(res.data))
-                        .catch((err) => console.log(err));
+                      const senderUUID = response[0].uuid;
 
-                      res.send("All Good").status(200);
-                    }
-                  );
-                });
+                      Connection.query(
+                        `update affiliate set totalLoginWith="${
+                          parseInt(response[0].totalLoginWith) + 1
+                        }" where uuid=${Connection.escape(senderUUID)}`,
+                        (error3, response3) => {
+                          if (error3) {
+                            console.log(error3);
+                            return res.json(401);
+                          }
+
+                          // Change Reciever Balance
+
+                          Connection.query(
+                            `select balance from user where uuid=${Connection.escape(
+                              uuid
+                            )}`,
+                            (error4, response4) => {
+                              if (error4) {
+                                console.log(error4);
+                                return res.json(401);
+                              }
+                              const reward = response[0].reward;
+
+                              console.log(response4[0]);
+                              const sqlQuery1 = `update user set balance="${
+                                parseInt(response4[0].balance) +
+                                parseInt(reward)
+                              }" where uuid = ${Connection.escape(uuid)}`;
+
+                              Connection.query(
+                                sqlQuery1,
+                                async (error5, response5) => {
+                                  if (error5) {
+                                    console.log("mysql error: ", error5);
+                                    return res.sendStatus(501);
+                                  }
+
+                                  // Change Sender Balance
+                                  Connection.query(
+                                    `select balance from user where uuid=${Connection.escape(
+                                      senderUUID
+                                    )}`,
+                                    (error6, response6) => {
+                                      if (error6) {
+                                        console.log(error6);
+                                        return res.json(401);
+                                      }
+
+                                      console.log(response6[0]);
+                                      const sqlQuery2 = `update user set balance="${
+                                        parseInt(response6[0].balance) +
+                                        parseInt(reward / 2)
+                                      }" where uuid = ${Connection.escape(
+                                        senderUUID
+                                      )}`;
+
+                                      Connection.query(
+                                        sqlQuery2,
+                                        async (error7, response7) => {
+                                          if (error7) {
+                                            console.log(
+                                              "mysql error: ",
+                                              error7
+                                            );
+                                            return res.sendStatus(501);
+                                          }
+
+                                          res.status(200).send({
+                                            code: 200,
+                                            msg: "Successfully Redeemed Code",
+                                          });
+                                        }
+                                      );
+                                    }
+                                  );
+
+                                  // res.status(200).send("Balance Changed");
+                                }
+                              );
+                            }
+                          );
+                        }
+                      );
+                    });
+                  }
+                }
+              } else {
+                console.log("No User Found");
+                res
+                  .send({
+                    code: 401,
+                    msg: "No User Found",
+                  })
+                  .status(401);
               }
-            } else {
-              console.log("No User Found");
-              res.send("No User Found").status(401);
+              // console.log(response1[0]);
             }
-            // console.log(response1[0]);
-          }
-        );
-      } else {
-        console.log("Invalid Code");
-        return res.send("Invalid Code").status(401);
-      }
-      // if (response[0] && response[0].code == null) {
-      // console.log("Invalid Code");
-      // return res.status(401).send("Invalid Code");
-      // }
-    }
-  );
-});
-
-app.post("/changeBalance/:uuid", (req, res) => {
-  const uuid = req.params.uuid;
-  const { reward } = req.body;
-
-  Connection.query(
-    `select balance from user where uuid=${Connection.escape(uuid)}`,
-    (error, response) => {
-      if (error) {
-        console.log(error);
-        return res.json(401);
-      }
-
-      console.log(response[0]);
-      const sqlQuery1 = `update user set balance="${
-        parseInt(response[0].balance) + parseInt(reward)
-      }" where uuid = ${Connection.escape(uuid)}`;
-
-      Connection.query(sqlQuery1, async (error3, response3) => {
-        if (error3) {
-          console.log("mysql error: ", error3);
-          return res.sendStatus(501);
+          );
+        } else {
+          console.log("Invalid Code");
+          return res
+            .send({
+              code: 401,
+              msg: "Invalid Code",
+            })
+            .status(401);
         }
-        res.status(200).send("Balance Changed");
-      });
-    }
-  );
+        // if (response[0] && response[0].code == null) {
+        // console.log("Invalid Code");
+        // return res.status(401).send("Invalid Code");
+        // }
+      }
+    );
+  });
 });
 
 app.post("/createReff/:uuid", (req, res) => {
@@ -615,7 +923,12 @@ app.post("/createReff/:uuid", (req, res) => {
 
       if (response[0] && response[0].code != null) {
         console.log("Code Already Taken");
-        return res.send("Code Already Taken").status(401);
+        return res
+          .send({
+            code: 401,
+            msg: "Code Already Taken",
+          })
+          .status(401);
       }
 
       Connection.query(
@@ -629,7 +942,12 @@ app.post("/createReff/:uuid", (req, res) => {
             return res.json(401);
           }
 
-          res.send("Code Set").status(200);
+          res
+            .send({
+              code: 200,
+              msg: "Code Set",
+            })
+            .status(200);
         }
       );
     }
