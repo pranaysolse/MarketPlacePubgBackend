@@ -49,7 +49,6 @@ function generateAccessToken(user) {
 // login token
 
 app.post("/login", async (req, res) => {
-  console.log(req.body);
   const { email } = req.body;
   const { password } = req.body;
 
@@ -69,17 +68,11 @@ app.post("/login", async (req, res) => {
 
   // refreshTokenArray.push(refreshToken);
 
-  console.log("both tokens \n", {
-    accessToken: token,
-    access_token,
-  });
-
   res
     .cookie("__access_token", access_token, {
       //  httpOnly:true
     })
     .send({ code: 200, msg: "Login Success" });
-  console.log("cookie created succesfully");
 });
 
 // login logout

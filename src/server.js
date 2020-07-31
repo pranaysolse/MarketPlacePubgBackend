@@ -186,7 +186,9 @@ app.get(
                           if (error3) {
                             return res.json(401);
                           }
-                          res.redirect("http://localhost:3000/Home/Deposit/Steam");
+                          res.redirect(
+                            "http://localhost:3000/Home/Deposit/Steam"
+                          );
                         }
                       );
                     }
@@ -263,18 +265,27 @@ app.get("/checkSteam", parseCookies, (req, res) => {
 
 // Socket Part
 
+// io.on("connection", (socket) => {
+//   console.log("User Connected");
+
+//   io.emit("some", "Something");
+
+//   socket.on("chat", (chat) => {
+//     // console.log("Chat", chat);
+//     io.emit("chat", chat);
+//   });
+
+//   socket.on("disconnect", () => {
+//     console.log("User Disconnect");
+//   });
+// });
+
 io.on("connection", (socket) => {
-  console.log("User Connected");
+  // console.log(socket.id);
 
-  io.emit("some", "Something");
-
-  socket.on("chat", (chat) => {
-    console.log("Chat", chat);
-    io.emit("chat", chat);
-  });
-
-  socket.on("disconnect", () => {
-    console.log("User Disconnect");
+  socket.on("SEND_MESSAGE", function (data) {
+    // console.log(data);
+    io.emit("RECEIVE_MESSAGE", data);
   });
 });
 
@@ -308,6 +319,26 @@ app.get("/verifyLogin", parseCookies, (req, res) => {
     }
   });
 });
+
+async function GetMidasCookie(req, res, next) {
+  try {
+    const result = await rp.get(
+      "https://www.midasbuy.com/midasbuy/in/buy/pubgm"
+    );
+
+    const Cookies = CookieJar.getCookieString(
+      "https://www.midasbuy.com/midasbuy/in/buy/pubgm"
+    );
+
+    const SpilltedCookie = Cookies.split("csrf=");
+
+    res.csrf = SpilltedCookie[1];
+    // console.log(res.Cookie);
+    next();
+  } catch (err) {
+    console.log(err);
+  }
+}
 
 app.get("/onpageload", GetMidasCookie, (req, res) => {
   const data = {
@@ -497,13 +528,6 @@ app.post("/login", parseCookies, (req, res) => {
 
                 // res.send("passmatch");
 
-                // axios stuff
-                // fetch heere
-                console.log(
-                  "axios will take response from authserver: logging response: ",
-                  response[0].uuid,
-                  response[0].password
-                );
               }
             } else {
               res.send({ code: 401, msg: "Email Not Found" }).status(401);
@@ -547,26 +571,6 @@ app.post("/login", parseCookies, (req, res) => {
   // })
   // });
 });
-
-async function GetMidasCookie(req, res, next) {
-  try {
-    const result = await rp.get(
-      "https://www.midasbuy.com/midasbuy/in/buy/pubgm"
-    );
-
-    const Cookies = CookieJar.getCookieString(
-      "https://www.midasbuy.com/midasbuy/in/buy/pubgm"
-    );
-
-    const SpilltedCookie = Cookies.split("csrf=");
-
-    res.csrf = SpilltedCookie[1];
-    // console.log(res.Cookie);
-    next();
-  } catch (err) {
-    console.log(err);
-  }
-}
 
 app.get("/getpubgname/:pubgid", parseCookies, async (req, res) => {
   // const Cookies = GetMidasCookie();
@@ -671,7 +675,7 @@ app.get("/userdata", parseCookies, (req, res) => {
       console.log("error:", err2.message);
       return res.send({ code: 401, msg: "Try Refreshing Page" }).status(401);
     }
-    console.log("value: ", value);
+    // console.log("value: ", value);
 
     const uuid = value.uuid;
     // check for the password agaist databse
@@ -683,7 +687,7 @@ app.get("/userdata", parseCookies, (req, res) => {
         console.log("mysql error: ", error);
         return res.sendStatus(501);
       }
-      console.log(response);
+      // console.log(response);
       res.send(response[0]);
     });
   });
