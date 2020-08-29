@@ -23,23 +23,23 @@ const config = require("../configs/MysqlConfig");
 require("dotenv").config({ path: "./configs/.env" });
 const corsConfig = require("../configs/corsConfig");
 const { stringify } = require("querystring");
-const { urlencoded } = require("body-parser");
+const bodyParser = require("body-parser");
+const nodemailer = require("nodemailer");
+const crypto = require("crypto");
 
-console.log(config);
+// console.log(config);
 const SALTROUND = 10;
 app.use(express.json());
 app.use(cors(corsConfig.config));
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.json());
+
 const Connection = mysql.createConnection(config.Config);
 Connection.connect();
 
 const axioConfig = {
   withCredentials: true,
 };
-
-// app.use((req, res, next) => {
-//   res.header("Access-Control-Allow-Origin", "*");
-//   next();
-// });
 
 // FaceBook Strategy
 // passport.use(
@@ -210,6 +210,11 @@ app.get(
   }
 );
 
+app.get("/getinventory", (req, res) => {
+  const appid = 730;
+  const steamid = "76561198354692664";
+});
+
 app.get("/checkSteam", parseCookies, (req, res) => {
   const access_token = res.Cookies.__access_token;
 
@@ -280,12 +285,112 @@ app.get("/checkSteam", parseCookies, (req, res) => {
 //   });
 // });
 
+const RollData = () => {
+  const clientSeed = uuidv4();
+  const serverSeed = uuidv4();
+  // const nonce = uuidv4();
+  const nonce = Math.floor(Math.random() * (100000 - 1 + 1) + 1);
+
+  // Here we use the seeds to calculate the spin (a number ranging from 0 to 14)
+  const roll = getRollSpin(serverSeed, clientSeed, nonce);
+  // const roll = getRollSpin(serverSeed, clientSeed);
+  const rollColour = getRollColour(roll);
+
+  /* Below this line are algorithmic functions which we use to calculate the Spin
+==================================================================================
+==================================================================================
+*/
+
+  function getRollSpinFromHash(hash) {
+    const subHash = hash.substr(0, 8);
+
+    const spinNumber = parseInt(subHash, 16);
+
+    return Math.abs(spinNumber) % 15;
+  }
+
+  function getRollSpin(serverSeed, clientSeed, nonce) {
+    const seed = getCombinedSeed(serverSeed, clientSeed, nonce);
+    const hash = crypto.createHmac("sha256", seed).digest("hex");
+
+    return getRollSpinFromHash(hash);
+  }
+
+  function getCombinedSeed(serverSeed, clientSeed, nonce) {
+    return [serverSeed, clientSeed, nonce].join("-");
+  }
+
+  function getRollColour(roll) {
+    if (roll === 0) {
+      return "Green";
+    }
+    if (roll <= 7 && roll >= 1) {
+      return "Red";
+    }
+    return "Black";
+  }
+  const RollData = {
+    color: rollColour,
+    spinvalue: roll,
+    clientseed: clientSeed,
+    serverSeed: serverSeed,
+    nonce: nonce,
+    rolling: false,
+  };
+  io.emit("roll-data", { rolling: true });
+  setTimeout(() => io.emit("roll-data", RollData), 5000);
+};
+
+const CrashData = () => {
+  var uuid = uuidv4();
+  var gameHash = crypto.createHmac("sha256", uuid).digest("hex");
+  // var gameHash = "9b9b8b82aed2ff2e5fa4ce56b0f68bdb0f0bef9d5b65e966fb0242f4b41d0b6a";
+  /* 
+Below this line is the formula which we use to calculate the result
+*/
+
+  const INSTANT_CRASH_PERCENTAGE = 10;
+  var crashPointFromHash = function (serverSeed) {
+    var hash = crypto.createHmac("sha256", serverSeed).digest("hex");
+
+    // Use the most significant 52-bit from the hash to calculate the crash point
+    var h = parseInt(hash.slice(0, 52 / 4), 16);
+
+    var e = Math.pow(2, 52);
+
+    const result = (100 * e - h) / (e - h);
+
+    // INSTANT_CRASH_PERCENTAGE of 6.66 will result in modifier of 0.934 = 6.66% house edge with a lowest crashpoint of 1.00x
+    const houseEdgeModifier = 1 - INSTANT_CRASH_PERCENTAGE / 100;
+
+    const endResult = Math.max(100, result * houseEdgeModifier);
+
+    return Math.floor(endResult);
+  };
+
+  const CrashValue = (crashPointFromHash(gameHash) / 100).toFixed(2);
+
+  const CrashData = {
+    crash: CrashValue,
+    hash: gameHash,
+  };
+  io.emit("crash-data", CrashData);
+};
+
+setInterval(RollData, 10000);
+setInterval(CrashData, 10000);
+
 io.on("connection", (socket) => {
   // console.log(socket.id);
+  // console.log("user Connected");
 
   socket.on("SEND_MESSAGE", function (data) {
     // console.log(data);
     io.emit("RECEIVE_MESSAGE", data);
+  });
+
+  socket.on("roll-bet", (rolldata) => {
+    console.log(rolldata);
   });
 });
 
@@ -340,22 +445,23 @@ async function GetMidasCookie(req, res, next) {
   }
 }
 
-app.get("/onpageload", GetMidasCookie, (req, res) => {
+app.get("/onpageload", (req, res) => {
   const data = {
     uuid: uuidv4(),
     host: "https://pubgtornado.com",
   };
 
-  const ctoken = res.csrf;
-
   const refresh_token = jwt.sign(data, process.env.REFRESH_TOKEN, {
     expiresIn: "5m",
   });
   // console.log(refresh_token);
-  res
-    .cookie("__refresh_token", refresh_token)
-    .cookie("__ctoken", ctoken)
-    .send("Set Refresh,Ctoken Token");
+  res.cookie("__refresh_token", refresh_token).send("Set Refresh");
+});
+
+app.get("/onpageload2", GetMidasCookie, (req, res) => {
+  const ctoken = res.csrf;
+  // console.log(refresh_token);
+  res.cookie("__ctoken", ctoken).send("Ctoken Token");
 });
 
 app.post("/register", parseCookies, (req, res) => {
@@ -462,6 +568,43 @@ app.post("/register", parseCookies, (req, res) => {
   });
 });
 
+app.get("/verifyMail", async (req, res) => {
+  // create reusable transporter object using the default SMTP transport
+
+  console.log(process.env.EmailId, process.env.Password);
+  let transporter = nodemailer.createTransport({
+    host: "mail.google.com",
+    port: 587,
+    secure: false, // true for 465, false for other ports
+    auth: {
+      user: process.env.EmailId,
+      pass: process.env.Password,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+  });
+
+  let MailOptions = {
+    from: '"Pubg Tornado" <foo@example.com>', // sender address
+    to: "ritikpatil370@gmail.com", // list of receivers
+    subject: "Hello ✔", // Subject line
+    text: "Hello world?", // plain text body
+    html: "<b>Hello world?</b>", // html body
+  };
+
+  // send mail with defined transport object
+  let info = await transporter.sendMail(MailOptions);
+
+  console.log("Message sent: %s", info.messageId);
+  // Message sent: <b658f8ca-6296-ccf4-8306-87d57a0b4321@example.com>
+
+  // Preview only available when sending through an Ethereal account
+  console.log("Preview URL: %s", nodemailer.getTestMessageUrl(info));
+
+  res.send("Mail Sent");
+});
+
 app.post("/login", parseCookies, (req, res) => {
   const { email } = req.body;
   const { password } = req.body;
@@ -491,7 +634,7 @@ app.post("/login", parseCookies, (req, res) => {
               console.log("mysql error: ", error);
               return res.sendStatus(501);
             }
-            console.log(response);
+            // console.log(response);
 
             // console.log(response);
             // validate response
@@ -527,7 +670,6 @@ app.post("/login", parseCookies, (req, res) => {
                 res.redirect(307, "http://localhost:4000/login");
 
                 // res.send("passmatch");
-
               }
             } else {
               res.send({ code: 401, msg: "Email Not Found" }).status(401);
@@ -590,7 +732,7 @@ app.get("/getpubgname/:pubgid", parseCookies, async (req, res) => {
 
     const ret = Resp.data.ret;
 
-    if (ret == 2002) {
+    if (ret === 2002) {
       const usefullData = {
         ret: ret,
         msg: "Invalid ID",
@@ -688,7 +830,17 @@ app.get("/userdata", parseCookies, (req, res) => {
         return res.sendStatus(501);
       }
       // console.log(response);
-      res.send(response[0]);
+      const userdata = {
+        username: response[0].username,
+        email: response[0].email,
+        uuid: response[0].uuid,
+        balance: response[0].balance,
+        level: parseInt(parseInt(response[0].xp) / 1000),
+        xp: response[0].xp,
+        pubgid: response[0].pubgid,
+      };
+
+      res.send(userdata);
     });
   });
 });
