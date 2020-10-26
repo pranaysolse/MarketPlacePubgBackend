@@ -20,7 +20,7 @@ const Router = express.Router();
 const http = require("http").createServer(app);
 const io = require("socket.io")(http);
 const config = require("../configs/MysqlConfig");
-require("dotenv").config({ path: "./configs/.env" });
+require("dotenv").config({ path: "./.env" });
 const corsConfig = require("../configs/corsConfig");
 const { stringify } = require("querystring");
 const bodyParser = require("body-parser");
@@ -41,249 +41,7 @@ const axioConfig = {
   withCredentials: true,
 };
 
-// FaceBook Strategy
-// passport.use(
-//   new FacebookStrategy(
-//     {
-//       clientID: "2591197717762295",
-//       clientSecret: "9b85cbe9a4f25444350b0514c20cfb78",
-//       callbackURL: "http://localhost:5000/auth/facebook/callback",
-//     },
-//     function (accessToken, refreshToken, profile, cb) {
-//       return cb(null, profile);
-//     }
-//   )
-// );
-
-// Steam Part
-passport.use(
-  new SteamStrategy(
-    {
-      returnURL: "http://localhost:5000/auth/steam/return",
-      realm: "http://localhost:5000/",
-      apiKey: process.env.SteamApiKey,
-    },
-    (identifier, profile, done) => {
-      return done(null, profile);
-    }
-  )
-);
-
-app.use(
-  session({
-    key: "session_id",
-    secret: "Ritik",
-    resave: true,
-    saveUninitialized: true,
-    cookie: {
-      maxAge: 259200000,
-    },
-  })
-);
-
-passport.serializeUser((user, done) => {
-  done(null, user._json);
-});
-
-passport.deserializeUser((obj, done) => {
-  done(null, obj);
-});
-
-app.use(passport.initialize());
-app.use(passport.session());
-
-// app.route.get(
-//   /^\/auth\/steam(\/return)?$/,
-//   passport.authenticate("steam", {
-//     failureRedirect: "/",
-//   }),
-//   (req, res) => {
-//     res.send("Good");
-//   }
-// );
-
-// app.get("/auth/facebook", passport.authenticate("facebook"));
-
-// app.get("/auth/facebook/callback", passport.authenticate("facebook"), function (
-//   req,
-//   res
-// ) {
-//   // Successful authentication, redirect home.
-//   res.redirect("http://localhost:3000/login");
-// });
-
-app.get("/auth/steam/", passport.authenticate("steam"));
-
-app.get(
-  "/auth/steam/return",
-  passport.authenticate("steam"),
-  parseCookies,
-  function (req, res) {
-    // Successful authentication, redirect home.
-
-    const access_token = res.Cookies.__access_token;
-
-    jwt.verify(access_token, process.env.ACCESS_TOKEN, (err, value) => {
-      if (err) {
-        console.log("error:", err.message);
-        return res.send({ code: 401, msg: "Unauthorized" }).status(401);
-      } else {
-        // console.log(value);
-        // console.log(req.user._json);
-        try {
-          const uuid = value.uuid;
-          const {
-            steamid,
-            personaname,
-            profileurl,
-            avatar,
-            avatarmedium,
-            avatarfull,
-            avatarhash,
-            realname,
-            loccountrycode,
-          } = req.user._json;
-
-          // Checking For Already Logged In Or Not
-          Connection.query(
-            `select steamLogin,username from user where uuid=${Connection.escape(
-              uuid
-            )}`,
-            (error, response) => {
-              if (error) {
-                return res.json(401);
-              }
-              if (response.length > 0) {
-                // console.log(response);
-
-                if (response[0].steamLogin === 0) {
-                  const username = response[0].username;
-
-                  Connection.query(
-                    `insert into steaminfo values(?,?,?,?,?,?,?,?,?,?,?)`,
-                    [
-                      steamid,
-                      personaname,
-                      profileurl,
-                      avatar,
-                      avatarmedium,
-                      avatarfull,
-                      avatarhash,
-                      realname,
-                      loccountrycode,
-                      uuid,
-                      username,
-                    ],
-                    (error1, response1) => {
-                      if (error1) {
-                        return res.json(401);
-                      }
-                      Connection.query(
-                        `update user set steamLogin = 1 where uuid=${Connection.escape(
-                          uuid
-                        )}`,
-                        (error3, response3) => {
-                          if (error3) {
-                            return res.json(401);
-                          }
-                          res.redirect(
-                            "http://localhost:3000/Home/Deposit/Steam"
-                          );
-                        }
-                      );
-                    }
-                  );
-                } else {
-                  console.log(response);
-                  res.send({ code: 401, msg: "Already Logged In" });
-                }
-              } else {
-                res.send({ code: 401, msg: "Unauthorized" });
-              }
-            }
-          );
-        } catch (err2) {
-          console.log(err2);
-        }
-      }
-    });
-  }
-);
-
-app.get("/getinventory", (req, res) => {
-  const appid = 730;
-  const steamid = "76561198354692664";
-});
-
-app.get("/checkSteam", parseCookies, (req, res) => {
-  const access_token = res.Cookies.__access_token;
-
-  jwt.verify(access_token, process.env.ACCESS_TOKEN, (err, value) => {
-    if (err) {
-      console.log("error:", err.message);
-      return res.send({ code: 401, msg: "Unauthorized" }).status(401);
-    } else {
-      // Check For Login
-      try {
-        const uuid = value.uuid;
-        Connection.query(
-          `select steamLogin from user where uuid=${Connection.escape(uuid)}`,
-          (error, response) => {
-            if (error) {
-              return res.json(401);
-            }
-            if (response.length > 0) {
-              // console.log(response);
-
-              if (response[0].steamLogin === 0) {
-                res.send({ code: 200, msg: "Steam Not Logged In", islogin: 0 });
-              } else {
-                Connection.query(
-                  `select * from steaminfo where uuid=${Connection.escape(
-                    uuid
-                  )}`,
-                  (error1, response1) => {
-                    if (error1) {
-                      return res.json(401);
-                    }
-                    if (response1.length > 0) {
-                      // console.log(response);
-                      res.send({
-                        code: 200,
-                        msg: "Steam Logged In",
-                        islogin: 1,
-                        steamDatas: response1[0],
-                      });
-                    }
-                  }
-                );
-              }
-            }
-          }
-        );
-      } catch (err) {
-        console.log(err);
-      }
-    }
-  });
-});
-
 // Socket Part
-
-// io.on("connection", (socket) => {
-//   console.log("User Connected");
-
-//   io.emit("some", "Something");
-
-//   socket.on("chat", (chat) => {
-//     // console.log("Chat", chat);
-//     io.emit("chat", chat);
-//   });
-
-//   socket.on("disconnect", () => {
-//     console.log("User Disconnect");
-//   });
-// });
 
 const RollData = () => {
   const clientSeed = uuidv4();
@@ -425,26 +183,6 @@ app.get("/verifyLogin", parseCookies, (req, res) => {
   });
 });
 
-async function GetMidasCookie(req, res, next) {
-  try {
-    const result = await rp.get(
-      "https://www.midasbuy.com/midasbuy/in/buy/pubgm"
-    );
-
-    const Cookies = CookieJar.getCookieString(
-      "https://www.midasbuy.com/midasbuy/in/buy/pubgm"
-    );
-
-    const SpilltedCookie = Cookies.split("csrf=");
-
-    res.csrf = SpilltedCookie[1];
-    // console.log(res.Cookie);
-    next();
-  } catch (err) {
-    console.log(err);
-  }
-}
-
 app.get("/onpageload", (req, res) => {
   const data = {
     uuid: uuidv4(),
@@ -456,12 +194,6 @@ app.get("/onpageload", (req, res) => {
   });
   // console.log(refresh_token);
   res.cookie("__refresh_token", refresh_token).send("Set Refresh");
-});
-
-app.get("/onpageload2", GetMidasCookie, (req, res) => {
-  const ctoken = res.csrf;
-  // console.log(refresh_token);
-  res.cookie("__ctoken", ctoken).send("Ctoken Token");
 });
 
 app.post("/register", parseCookies, (req, res) => {
@@ -476,7 +208,6 @@ app.post("/register", parseCookies, (req, res) => {
   const { username } = req.body;
   const { password } = req.body;
   const { email } = req.body;
-  const { pubgid } = req.body;
   const balance = 0;
   const level = 0;
   const xp = 0;
@@ -504,7 +235,9 @@ app.post("/register", parseCookies, (req, res) => {
         }
 
         Connection.query(
-          `select pubgid from user where pubgid=${Connection.escape(pubgid)}`,
+          `select username from user where username=${Connection.escape(
+            username
+          )}`,
           (error1, response1) => {
             if (error1) {
               return res.json(401);
@@ -512,10 +245,10 @@ app.post("/register", parseCookies, (req, res) => {
 
             console.log(response1[0]);
 
-            if (response1[0] && response1[0].pubgid != null) {
-              console.log("PubgId Already Exists");
+            if (response1[0] && response1[0].username != null) {
+              console.log("Username Already Exists");
               return res
-                .send({ code: 401, msg: "Pubg ID Already Taken" })
+                .send({ code: 401, msg: "Username Already Taken" })
                 .status(401);
             }
 
@@ -528,8 +261,8 @@ app.post("/register", parseCookies, (req, res) => {
               // let sql =
               // inset all the data into the table got from the register
               Connection.query(
-                "insert into user values(?,?,?,?,?,?,?,?)",
-                [uuid, username, hash, email, pubgid, balance, level, xp],
+                "insert into user values(?,?,?,?,?,?,?)",
+                [uuid, username, hash, email, balance, level, xp],
                 (error2, result) => {
                   if (error2) {
                     console.log("mysql error : ", error2);
@@ -573,9 +306,8 @@ app.get("/verifyMail", async (req, res) => {
 
   console.log(process.env.EmailId, process.env.Password);
   let transporter = nodemailer.createTransport({
-    host: "mail.google.com",
-    port: 587,
-    secure: false, // true for 465, false for other ports
+    host: "smtp.gmail.com",
+    port: 465,
     auth: {
       user: process.env.EmailId,
       pass: process.env.Password,
@@ -586,23 +318,21 @@ app.get("/verifyMail", async (req, res) => {
   });
 
   let MailOptions = {
-    from: '"Pubg Tornado" <foo@example.com>', // sender address
-    to: "ritikpatil370@gmail.com", // list of receivers
-    subject: "Hello ✔", // Subject line
+    from: '"PUBG Team" <pubgtornadoteam@gmail.com>', // sender address
+    to: "johelob923@sekris.com", // list of receivers
+    subject: "Hello", // Subject line
     text: "Hello world?", // plain text body
     html: "<b>Hello world?</b>", // html body
   };
 
   // send mail with defined transport object
-  let info = await transporter.sendMail(MailOptions);
-
-  console.log("Message sent: %s", info.messageId);
-  // Message sent: <b658f8ca-6296-ccf4-8306-87d57a0b4321@example.com>
-
-  // Preview only available when sending through an Ethereal account
-  console.log("Preview URL: %s", nodemailer.getTestMessageUrl(info));
-
-  res.send("Mail Sent");
+  transporter.sendMail(MailOptions, function (err, data) {
+    if (err) {
+      console.log(err.message);
+    } else {
+      res.send("Mail Sent!");
+    }
+  });
 });
 
 app.post("/login", parseCookies, (req, res) => {
@@ -714,55 +444,6 @@ app.post("/login", parseCookies, (req, res) => {
   // });
 });
 
-app.get("/getpubgname/:pubgid", parseCookies, async (req, res) => {
-  // const Cookies = GetMidasCookie();
-  // console.log(res.Cookie);
-
-  const pubgid = req.params.pubgid;
-
-  const ctoken = res.Cookies.__ctoken;
-
-  // console.log(ctoken);
-
-  try {
-    const Resp = await Axios.get(
-      `https://www.midasbuy.com/interface/getCharac?ctoken=${ctoken}&appid=1450015065&currency_type=INR&country=IN&midasbuyArea=SouthAsia&sc=&from=&task_token=&pf=mds_hkweb_pc-v2-android-midasweb-midasbuy&zoneid=1&_id=0.7596290802339253&shopcode=midasbuy&cgi_extend=&buyType=save&openid=${pubgid}`,
-      axioConfig
-    );
-
-    const ret = Resp.data.ret;
-
-    if (ret === 2002) {
-      const usefullData = {
-        ret: ret,
-        msg: "Invalid ID",
-      };
-      res.send(usefullData);
-    } else {
-      const decoded = decodeURIComponent(Resp.data.info.charac_name);
-      const username = decoded;
-      const haveRoyalPass = Resp.data.info.pass_is_buy;
-
-      const usefullData = {
-        ret,
-        username,
-        haveRoyalPass,
-      };
-
-      // console.log(username);
-      res.send(usefullData);
-    }
-  } catch {
-    console.log("Failed To Fetch");
-
-    const usefullData = {
-      ret: 2002,
-      msg: "Failed To Fetch",
-    };
-    res.send(usefullData);
-  }
-});
-
 app.get("/getuuid/:email", (req, res) => {
   const email = req.params.email;
   // res.send(email);
@@ -821,7 +502,7 @@ app.get("/userdata", parseCookies, (req, res) => {
 
     const uuid = value.uuid;
     // check for the password agaist databse
-    const sqlQuery = `select username,email,uuid,balance,level,xp,pubgid from user where uuid = ${Connection.escape(
+    const sqlQuery = `select username,email,uuid,balance,level,xp from user where uuid = ${Connection.escape(
       uuid
     )}`;
     Connection.query(sqlQuery, async (error, response) => {
@@ -837,7 +518,6 @@ app.get("/userdata", parseCookies, (req, res) => {
         balance: response[0].balance,
         level: parseInt(parseInt(response[0].xp) / 1000),
         xp: response[0].xp,
-        pubgid: response[0].pubgid,
       };
 
       res.send(userdata);
